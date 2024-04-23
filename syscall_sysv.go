@@ -6,6 +6,7 @@
 package purego
 
 import (
+	"fmt"
 	"reflect"
 	"runtime"
 	"sync"
@@ -85,7 +86,7 @@ output:
 		switch ty.Out(0).Kind() {
 		case reflect.Pointer, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-			reflect.Bool, reflect.UnsafePointer:
+			reflect.Bool, reflect.UnsafePointer, reflect.Struct:
 			break output
 		}
 		panic("purego: unsupported return type: " + ty.String())
@@ -172,6 +173,25 @@ func callbackWrap(a *callbackArgs) {
 			a.result = ret[0].Pointer()
 		case reflect.UnsafePointer:
 			a.result = ret[0].Pointer()
+		case reflect.Struct:
+			outSize := ret[0].Type().Size()
+			fmt.Printf("%+v %d\n", ret[0].Interface(), outSize)
+			switch {
+			case outSize == 0:
+				return
+			case outSize <= 8:
+				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
+				return
+			// case outSize <= 16:
+			//	reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
+			//	return
+			case outSize > 16:
+				// We were passed the address to place the return struct
+				// so copy the Go struct into the provided memory
+				reflect.NewAt(ret[0].Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result))).Elem().Set(ret[0])
+				return
+			}
+			fallthrough
 		default:
 			panic("purego: unsupported kind: " + k.String())
 		}

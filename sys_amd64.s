@@ -139,7 +139,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	SUBQ $(24+callbackArgs__size), SP
 	MOVQ AX, (24+callbackArgs_index)(SP)  // callback index
 	MOVQ R8, (24+callbackArgs_args)(SP)   // address of args vector
-	MOVQ $0, (24+callbackArgs_result)(SP) // result
+	MOVQ DI, (24+callbackArgs_result)(SP) // result
 	LEAQ 24(SP), AX                       // take the address of callbackArgs
 
 	// Call cgocallback, which will call callbackWrap(frame).

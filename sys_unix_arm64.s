@@ -47,7 +47,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVD $(callbackArgs__size)(RSP), R13
 	MOVD R12, callbackArgs_index(R13)    // callback index
 	MOVD R14, callbackArgs_args(R13)     // address of args vector
-	MOVD ZR, callbackArgs_result(R13)    // result
+	MOVD R8, callbackArgs_result(R13)    // result
 
 	// Move parameters into registers
 	// Get the ABIInternal function pointer
