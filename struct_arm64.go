@@ -19,7 +19,7 @@ func getStruct(outType reflect.Type, syscall syscall15Args) (v reflect.Value) {
 		if isAllFloats, numFields := isAllSameFloat(outType); isAllFloats {
 			r1 = syscall.f1
 			if numFields == 2 {
-				r1 = syscall.f2<<32 | syscall.f1
+				r1 = syscall.f2<<32 | syscall.f1&math.MaxUint32
 			}
 		}
 		return reflect.NewAt(outType, unsafe.Pointer(&struct{ a uintptr }{r1})).Elem()

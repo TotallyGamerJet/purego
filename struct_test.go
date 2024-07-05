@@ -623,16 +623,16 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnOneDouble returned %+v wanted %+v", ret, expected)
 				}
 			}
-			/*{
-				type TwoDoubles struct{ a, b float64 }
+			{
+				type TwoDoubles struct{ A, B float64 }
 				var ReturnTwoDoubles func(a, b float64) TwoDoubles
 				register(&ReturnTwoDoubles, lib, "ReturnTwoDoubles")
-				expected := TwoDoubles{1, 2}
-				if ret := ReturnTwoDoubles(1, 2); ret != expected {
+				expected := TwoDoubles{7, 3}
+				if ret := ReturnTwoDoubles(7, 3); ret != expected {
 					t.Fatalf("ReturnTwoDoubles returned %+v wanted %+v", ret, expected)
 				}
 			}
-			{
+			/*{
 				type ThreeDoubles struct{ a, b, c float64 }
 				var ReturnThreeDoubles func(a, b, c float64) ThreeDoubles
 				register(&ReturnThreeDoubles, lib, "ReturnThreeDoubles")
