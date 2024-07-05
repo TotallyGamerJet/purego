@@ -204,6 +204,21 @@ func callbackWrap(a *callbackArgs) {
 				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
 				return
 			case outSize <= 16:
+				//if isAllFloats, numFields := isAllSameFloat(outType); isAllFloats {
+				//	switch numFields {
+				//	case 4:
+				//		r1 = syscall.f2<<32 | syscall.f1
+				//		r2 = syscall.f4<<32 | syscall.f3
+				//	case 3:
+				//		r1 = syscall.f2<<32 | syscall.f1
+				//		r2 = syscall.f3
+				//	case 2:
+				//		r1 = syscall.f1
+				//		r2 = syscall.f2
+				//	default:
+				//		panic("unreachable")
+				//	}
+				//}
 				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
 				return
 			case outSize > 16:

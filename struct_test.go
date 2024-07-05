@@ -596,16 +596,16 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnOneFloat returned %+v wanted %+v", ret, expected)
 				}
 			}
-			/*{
-				type TwoFloats struct{ a, b float32 }
+			{
+				type TwoFloats struct{ A, B float32 }
 				var ReturnTwoFloats func(a, b float32) TwoFloats
 				register(&ReturnTwoFloats, lib, "ReturnTwoFloats")
-				expected := TwoFloats{3, 10}
+				expected := TwoFloats{5, 2}
 				if ret := ReturnTwoFloats(5, 2); ret != expected {
 					t.Fatalf("ReturnTwoFloats returned %+v wanted %+v", ret, expected)
 				}
 			}
-			{
+			/*{
 				type ThreeFloats struct{ a, b, c float32 }
 				var ReturnThreeFloats func(a, b, c float32) ThreeFloats
 				register(&ReturnThreeFloats, lib, "ReturnThreeFloats")

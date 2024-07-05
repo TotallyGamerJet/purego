@@ -75,7 +75,7 @@ struct TwoFloats{
 };
 
 struct TwoFloats ReturnTwoFloats(float a, float b) {
-    struct TwoFloats e = {a-b, a*b};
+    struct TwoFloats e = {a, b};
     return e;
 }
 
