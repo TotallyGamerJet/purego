@@ -69,7 +69,8 @@ type callbackArgs struct {
 	// for this callback.
 	args unsafe.Pointer
 	// Below are out-args from callbackWrap
-	result uintptr
+	result  uintptr
+	result2 uintptr // TODO: make array?
 }
 
 func compileCallback(fn interface{}) uintptr {
@@ -202,9 +203,9 @@ func callbackWrap(a *callbackArgs) {
 			case outSize <= 8:
 				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
 				return
-			// case outSize <= 16:
-			//	reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
-			//	return
+			case outSize <= 16:
+				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
+				return
 			case outSize > 16:
 				// We were passed the address to place the return struct
 				// so copy the Go struct into the provided memory

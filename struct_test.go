@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -567,7 +569,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnOneLong returned %+v wanted %+v", ret, expected)
 				}
 			}
-			/*{
+			{
 				type TwoLongs struct{ A, B int64 }
 				var ReturnTwoLongs func(a, b int64) TwoLongs
 				register(&ReturnTwoLongs, lib, "ReturnTwoLongs")
@@ -575,7 +577,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				if ret := ReturnTwoLongs(1, 2); ret != expected {
 					t.Fatalf("ReturnTwoLongs returned %+v wanted %+v", ret, expected)
 				}
-			}*/
+			}
 			{
 				type ThreeLongs struct{ A, B, C int64 }
 				var ReturnThreeLongs func(a, b, c int64) ThreeLongs
@@ -622,78 +624,78 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				}
 			}
 			/*{
-							type TwoDoubles struct{ a, b float64 }
-							var ReturnTwoDoubles func(a, b float64) TwoDoubles
-							register(&ReturnTwoDoubles, lib, "ReturnTwoDoubles")
-							expected := TwoDoubles{1, 2}
-							if ret := ReturnTwoDoubles(1, 2); ret != expected {
-								t.Fatalf("ReturnTwoDoubles returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type ThreeDoubles struct{ a, b, c float64 }
-							var ReturnThreeDoubles func(a, b, c float64) ThreeDoubles
-							register(&ReturnThreeDoubles, lib, "ReturnThreeDoubles")
-							expected := ThreeDoubles{1, 2, 3}
-							if ret := ReturnThreeDoubles(1, 2, 3); ret != expected {
-								t.Fatalf("ReturnThreeDoubles returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type FourDoubles struct{ a, b, c, d float64 }
-							var ReturnFourDoubles func(a, b, c, d float64) FourDoubles
-							register(&ReturnFourDoubles, lib, "ReturnFourDoubles")
-							expected := FourDoubles{1, 2, 3, 4}
-							if ret := ReturnFourDoubles(1, 2, 3, 4); ret != expected {
-								t.Fatalf("ReturnFourDoubles returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type FourDoublesInternal struct {
-								f struct{ a, b float64 }
-								g struct{ c, d float64 }
-							}
-							var ReturnFourDoublesInternal func(a, b, c, d float64) FourDoublesInternal
-							register(&ReturnFourDoublesInternal, lib, "ReturnFourDoublesInternal")
-							expected := FourDoublesInternal{f: struct{ a, b float64 }{a: 1, b: 2}, g: struct{ c, d float64 }{c: 3, d: 4}}
-							if ret := ReturnFourDoublesInternal(1, 2, 3, 4); ret != expected {
-								t.Fatalf("ReturnFourDoublesInternal returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type FiveDoubles struct{ a, b, c, d, e float64 }
-							var ReturnFiveDoubles func(a, b, c, d, e float64) FiveDoubles
-							register(&ReturnFiveDoubles, lib, "ReturnFiveDoubles")
-							expected := FiveDoubles{1, 2, 3, 4, 5}
-							if ret := ReturnFiveDoubles(1, 2, 3, 4, 5); ret != expected {
-								t.Fatalf("ReturnFiveDoubles returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type OneFloatOneDouble struct {
-								a float32
-								_ float32
-								b float64
-							}
-							var ReturnOneFloatOneDouble func(a float32, b float64) OneFloatOneDouble
-							register(&ReturnOneFloatOneDouble, lib, "ReturnOneFloatOneDouble")
-							expected := OneFloatOneDouble{a: 1, b: 2}
-							if ret := ReturnOneFloatOneDouble(1, 2); ret != expected {
-								t.Fatalf("ReturnOneFloatOneDouble returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type OneDoubleOneFloat struct {
-								a float64
-								b float32
-							}
-							var ReturnOneDoubleOneFloat func(a float64, b float32) OneDoubleOneFloat
-							register(&ReturnOneDoubleOneFloat, lib, "ReturnOneDoubleOneFloat")
-							expected := OneDoubleOneFloat{1, 2}
-							if ret := ReturnOneDoubleOneFloat(1, 2); ret != expected {
-								t.Fatalf("ReturnOneDoubleOneFloat returned %+v wanted %+v", ret, expected)
-							}
-						}
+				type TwoDoubles struct{ a, b float64 }
+				var ReturnTwoDoubles func(a, b float64) TwoDoubles
+				register(&ReturnTwoDoubles, lib, "ReturnTwoDoubles")
+				expected := TwoDoubles{1, 2}
+				if ret := ReturnTwoDoubles(1, 2); ret != expected {
+					t.Fatalf("ReturnTwoDoubles returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type ThreeDoubles struct{ a, b, c float64 }
+				var ReturnThreeDoubles func(a, b, c float64) ThreeDoubles
+				register(&ReturnThreeDoubles, lib, "ReturnThreeDoubles")
+				expected := ThreeDoubles{1, 2, 3}
+				if ret := ReturnThreeDoubles(1, 2, 3); ret != expected {
+					t.Fatalf("ReturnThreeDoubles returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type FourDoubles struct{ a, b, c, d float64 }
+				var ReturnFourDoubles func(a, b, c, d float64) FourDoubles
+				register(&ReturnFourDoubles, lib, "ReturnFourDoubles")
+				expected := FourDoubles{1, 2, 3, 4}
+				if ret := ReturnFourDoubles(1, 2, 3, 4); ret != expected {
+					t.Fatalf("ReturnFourDoubles returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type FourDoublesInternal struct {
+					f struct{ a, b float64 }
+					g struct{ c, d float64 }
+				}
+				var ReturnFourDoublesInternal func(a, b, c, d float64) FourDoublesInternal
+				register(&ReturnFourDoublesInternal, lib, "ReturnFourDoublesInternal")
+				expected := FourDoublesInternal{f: struct{ a, b float64 }{a: 1, b: 2}, g: struct{ c, d float64 }{c: 3, d: 4}}
+				if ret := ReturnFourDoublesInternal(1, 2, 3, 4); ret != expected {
+					t.Fatalf("ReturnFourDoublesInternal returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type FiveDoubles struct{ a, b, c, d, e float64 }
+				var ReturnFiveDoubles func(a, b, c, d, e float64) FiveDoubles
+				register(&ReturnFiveDoubles, lib, "ReturnFiveDoubles")
+				expected := FiveDoubles{1, 2, 3, 4, 5}
+				if ret := ReturnFiveDoubles(1, 2, 3, 4, 5); ret != expected {
+					t.Fatalf("ReturnFiveDoubles returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type OneFloatOneDouble struct {
+					a float32
+					_ float32
+					b float64
+				}
+				var ReturnOneFloatOneDouble func(a float32, b float64) OneFloatOneDouble
+				register(&ReturnOneFloatOneDouble, lib, "ReturnOneFloatOneDouble")
+				expected := OneFloatOneDouble{a: 1, b: 2}
+				if ret := ReturnOneFloatOneDouble(1, 2); ret != expected {
+					t.Fatalf("ReturnOneFloatOneDouble returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type OneDoubleOneFloat struct {
+					a float64
+					b float32
+				}
+				var ReturnOneDoubleOneFloat func(a float64, b float32) OneDoubleOneFloat
+				register(&ReturnOneDoubleOneFloat, lib, "ReturnOneDoubleOneFloat")
+				expected := OneDoubleOneFloat{1, 2}
+				if ret := ReturnOneDoubleOneFloat(1, 2); ret != expected {
+					t.Fatalf("ReturnOneDoubleOneFloat returned %+v wanted %+v", ret, expected)
+				}
+			}*/
 			{
 				type Unaligned1 struct {
 					A int8
@@ -708,7 +710,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				if ret := ReturnUnaligned1(1, 2, 3); ret != expected {
 					t.Fatalf("ReturnUnaligned1 returned %+v wanted %+v", ret, expected)
 				}
-			}*/
+			}
 
 			{
 				type Mixed1 struct {
@@ -761,7 +763,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				if ret := ReturnMixed4(1, 2, 3); ret != expected {
 					t.Fatalf("ReturnMixed4 returned %+v wanted %+v", ret, expected)
 				}
-			}
+			}*/
 			{
 				type Ptr1 struct {
 					A *int64
@@ -776,7 +778,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				}
 				runtime.KeepAlive(a)
 				runtime.KeepAlive(b)
-			}*/
+			}
 		})
 	}
 }

@@ -62,6 +62,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	// Get callback result.
 	MOVD  $(callbackArgs__size)(RSP), R13
 	MOVD  callbackArgs_result(R13), R0
+	MOVD  callbackArgs_result2(R13), R1
 	FMOVD callbackArgs_result(R13), F0
 
 	// Restore LR and R27
