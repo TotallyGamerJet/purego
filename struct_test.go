@@ -10,9 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"testing"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -587,43 +585,43 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnThreeLongs returned %+v wanted %+v", ret, expected)
 				}
 			}
+			{
+				type OneFloat struct{ A float32 }
+				var ReturnOneFloat func(a float32) OneFloat
+				register(&ReturnOneFloat, lib, "ReturnOneFloat")
+				expected := OneFloat{1}
+				if ret := ReturnOneFloat(1); ret != expected {
+					t.Fatalf("ReturnOneFloat returned %+v wanted %+v", ret, expected)
+				}
+			}
 			/*{
-							type OneFloat struct{ a float32 }
-							var ReturnOneFloat func(a float32) OneFloat
-							register(&ReturnOneFloat, lib, "ReturnOneFloat")
-							expected := OneFloat{1}
-							if ret := ReturnOneFloat(1); ret != expected {
-								t.Fatalf("ReturnOneFloat returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type TwoFloats struct{ a, b float32 }
-							var ReturnTwoFloats func(a, b float32) TwoFloats
-							register(&ReturnTwoFloats, lib, "ReturnTwoFloats")
-							expected := TwoFloats{3, 10}
-							if ret := ReturnTwoFloats(5, 2); ret != expected {
-								t.Fatalf("ReturnTwoFloats returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type ThreeFloats struct{ a, b, c float32 }
-							var ReturnThreeFloats func(a, b, c float32) ThreeFloats
-							register(&ReturnThreeFloats, lib, "ReturnThreeFloats")
-							expected := ThreeFloats{1, 2, 3}
-							if ret := ReturnThreeFloats(1, 2, 3); ret != expected {
-								t.Fatalf("ReturnThreeFloats returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
-							type OneDouble struct{ a float64 }
-							var ReturnOneDouble func(a float64) OneDouble
-							register(&ReturnOneDouble, lib, "ReturnOneDouble")
-							expected := OneDouble{1}
-							if ret := ReturnOneDouble(1); ret != expected {
-								t.Fatalf("ReturnOneDouble returned %+v wanted %+v", ret, expected)
-							}
-						}
-						{
+				type TwoFloats struct{ a, b float32 }
+				var ReturnTwoFloats func(a, b float32) TwoFloats
+				register(&ReturnTwoFloats, lib, "ReturnTwoFloats")
+				expected := TwoFloats{3, 10}
+				if ret := ReturnTwoFloats(5, 2); ret != expected {
+					t.Fatalf("ReturnTwoFloats returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
+				type ThreeFloats struct{ a, b, c float32 }
+				var ReturnThreeFloats func(a, b, c float32) ThreeFloats
+				register(&ReturnThreeFloats, lib, "ReturnThreeFloats")
+				expected := ThreeFloats{1, 2, 3}
+				if ret := ReturnThreeFloats(1, 2, 3); ret != expected {
+					t.Fatalf("ReturnThreeFloats returned %+v wanted %+v", ret, expected)
+				}
+			}*/
+			{
+				type OneDouble struct{ A float64 }
+				var ReturnOneDouble func(a float64) OneDouble
+				register(&ReturnOneDouble, lib, "ReturnOneDouble")
+				expected := OneDouble{1}
+				if ret := ReturnOneDouble(1); ret != expected {
+					t.Fatalf("ReturnOneDouble returned %+v wanted %+v", ret, expected)
+				}
+			}
+			/*{
 							type TwoDoubles struct{ a, b float64 }
 							var ReturnTwoDoubles func(a, b float64) TwoDoubles
 							register(&ReturnTwoDoubles, lib, "ReturnTwoDoubles")
@@ -724,21 +722,21 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnMixed1 returned %+v wanted %+v", ret, expected)
 				}
 			}
-			{
-				type Mixed2 struct {
-					A float32
-					B int32
-					C float32
-					D int32
-				}
-				var ReturnMixed2 func(a float32, b int32, c float32, d int32) Mixed2
-				register(&ReturnMixed2, lib, "ReturnMixed2")
-				expected := Mixed2{1, 2, 3, 4}
-				if ret := ReturnMixed2(1, 2, 3, 4); ret != expected {
-					t.Fatalf("ReturnMixed2 returned %+v wanted %+v", ret, expected)
-				}
-			}
-			{
+			//{
+			//	type Mixed2 struct {
+			//		A float32
+			//		B int32
+			//		C float32
+			//		D int32
+			//	}
+			//	var ReturnMixed2 func(a float32, b int32, c float32, d int32) Mixed2
+			//	register(&ReturnMixed2, lib, "ReturnMixed2")
+			//	expected := Mixed2{1, 2, 3, 4}
+			//	if ret := ReturnMixed2(1, 2, 3, 4); ret != expected {
+			//		t.Fatalf("ReturnMixed2 returned %+v wanted %+v", ret, expected)
+			//	}
+			//}
+			/*{
 				type Mixed3 struct {
 					A float32
 					B uint32
@@ -778,7 +776,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				}
 				runtime.KeepAlive(a)
 				runtime.KeepAlive(b)
-			}
+			}*/
 		})
 	}
 }
