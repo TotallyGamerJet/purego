@@ -230,8 +230,8 @@ func callbackWrap(a *callbackArgs) {
 					}
 				}
 				return
-			case outSize > 16:
-				if isAllFloats, _ := isAllSameFloat(ret[0].Type()); isAllFloats {
+			default:
+				if isAllFloats, numFields := isAllSameFloat(ret[0].Type()); isAllFloats && numFields <= 4 {
 					reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
 					return
 				}
