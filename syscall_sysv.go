@@ -72,6 +72,8 @@ type callbackArgs struct {
 	// Below are out-args from callbackWrap
 	result  uintptr
 	result2 uintptr // TODO: make array?
+	result3 uintptr
+	result4 uintptr
 }
 
 func compileCallback(fn interface{}) uintptr {
@@ -210,6 +212,23 @@ func callbackWrap(a *callbackArgs) {
 				return
 			case outSize <= 16:
 				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
+				if isAllFloats, numFields := isAllSameFloat(ret[0].Type()); isAllFloats {
+					switch numFields {
+					case 4:
+						a.result4 = a.result2 >> 32
+						a.result3 = a.result2 & math.MaxUint32
+						a.result2 = a.result >> 32
+						a.result &= math.MaxUint32
+					case 3:
+						a.result3 = a.result2 & math.MaxUint32
+						a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
+						a.result &= math.MaxUint32
+					case 2:
+						// nothing to do
+					default:
+						panic("unreachable")
+					}
+				}
 				return
 			case outSize > 16:
 				// We were passed the address to place the return struct

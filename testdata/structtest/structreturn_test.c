@@ -88,6 +88,15 @@ struct ThreeFloats ReturnThreeFloats(float a, float b, float c) {
     return e;
 }
 
+struct FloatFloats{
+    float a, b, c, d;
+};
+
+struct FloatFloats ReturnFourFloats(float a, float b, float c, float d) {
+    struct FloatFloats e = {a, b, c, d};
+    return e;
+}
+
 struct OneFloat ReturnOneFloat(float a) {
     struct OneFloat e = {a};
     return e;
