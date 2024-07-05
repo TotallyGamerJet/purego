@@ -6,7 +6,6 @@
 package purego_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -499,10 +498,6 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 		{name: "NativeFunc", register: func(fptr interface{}, _ uintptr, _ string) {
 			fn := reflect.MakeFunc(reflect.TypeOf(fptr).Elem(), func(args []reflect.Value) []reflect.Value {
 				retType := reflect.TypeOf(fptr).Elem().Out(0)
-				for _, a := range args {
-					fmt.Printf("%+v ", a.Interface())
-				}
-				fmt.Println()
 				ret := reflect.New(retType).Elem()
 				next := nextFieldFn(ret)
 				for _, a := range args {
@@ -733,21 +728,21 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnMixed1 returned %+v wanted %+v", ret, expected)
 				}
 			}
-			//{
-			//	type Mixed2 struct {
-			//		A float32
-			//		B int32
-			//		C float32
-			//		D int32
-			//	}
-			//	var ReturnMixed2 func(a float32, b int32, c float32, d int32) Mixed2
-			//	register(&ReturnMixed2, lib, "ReturnMixed2")
-			//	expected := Mixed2{1, 2, 3, 4}
-			//	if ret := ReturnMixed2(1, 2, 3, 4); ret != expected {
-			//		t.Fatalf("ReturnMixed2 returned %+v wanted %+v", ret, expected)
-			//	}
-			//}
-			/*{
+			{
+				type Mixed2 struct {
+					A float32
+					B int32
+					C float32
+					D int32
+				}
+				var ReturnMixed2 func(a float32, b int32, c float32, d int32) Mixed2
+				register(&ReturnMixed2, lib, "ReturnMixed2")
+				expected := Mixed2{1, 2, 3, 4}
+				if ret := ReturnMixed2(1, 2, 3, 4); ret != expected {
+					t.Fatalf("ReturnMixed2 returned %+v wanted %+v", ret, expected)
+				}
+			}
+			{
 				type Mixed3 struct {
 					A float32
 					B uint32
@@ -772,7 +767,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				if ret := ReturnMixed4(1, 2, 3); ret != expected {
 					t.Fatalf("ReturnMixed4 returned %+v wanted %+v", ret, expected)
 				}
-			}*/
+			}
 			{
 				type Ptr1 struct {
 					A *int64

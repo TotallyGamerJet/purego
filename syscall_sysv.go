@@ -6,7 +6,6 @@
 package purego
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"runtime"
@@ -199,7 +198,6 @@ func callbackWrap(a *callbackArgs) {
 			a.result = ret[0].Pointer()
 		case reflect.Struct:
 			outSize := ret[0].Type().Size()
-			fmt.Printf("%+v %d\n", ret[0].Interface(), outSize)
 			switch {
 			case outSize == 0:
 				return
@@ -224,7 +222,7 @@ func callbackWrap(a *callbackArgs) {
 						a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
 						a.result &= math.MaxUint32
 					case 2:
-						// nothing to do
+						// two float64s are already in a.result and a.result2
 					default:
 						panic("unreachable")
 					}
@@ -240,7 +238,6 @@ func callbackWrap(a *callbackArgs) {
 				reflect.NewAt(ret[0].Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result))).Elem().Set(ret[0])
 				return
 			}
-			fallthrough
 		default:
 			panic("purego: unsupported kind: " + k.String())
 		}
