@@ -7,7 +7,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ['1.18.x', '1.19.x', '1.20.x', '1.21.x', '1.22.x']
+        go: ['1.18.x', '1.19.x', '1.20.x', '1.21.x', '1.22.x', '1.23.0-rc.1']
     name: Test with Go ${{ matrix.go }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     defaults:
@@ -21,10 +21,10 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
 
@@ -67,6 +67,12 @@ jobs:
           env GOOS=freebsd GOARCH=amd64 go build -gcflags="github.com/ebitengine/purego/internal/fakecgo=-std" -v ./...
           env GOOS=freebsd GOARCH=arm64 go build -gcflags="github.com/ebitengine/purego/internal/fakecgo=-std" -v ./...
 
+      - name: go build (plugin)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run:
+          # Make sure that plugin buildmode works since we save the R15 register (#254)
+          go build -buildmode=plugin ./examples/libc
+
       - name: go mod vendor
         if: runner.os != 'Linux'
         run: |
@@ -97,10 +103,26 @@ jobs:
           env QEMU_LD_PREFIX=/usr/aarch64-linux-gnu qemu-aarch64 ./purego-test-nocgo -test.shuffle=on -test.v -test.count=10
           env GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go test -c -o=purego-test-cgo .
           env QEMU_LD_PREFIX=/usr/aarch64-linux-gnu qemu-aarch64 ./purego-test-cgo -test.shuffle=on -test.v -test.count=10
+          
+          echo "=> go build (plugin)"
+          # Make sure that plugin buildmode works since we save the R15 register (#254)
+          env GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -buildmode=plugin ./examples/libc
+          
           go env -u CC
           go env -u CXX
 
-      # TODO: add Windows 386 tests
+      - name: go test (Windows 386)
+        if: runner.os == 'Windows'
+        run: |
+          env CGO_ENABLED=0 GOARCH=386 go test -shuffle=on -v -count=10 ./...
+          env CGO_ENABLED=1 GOARCH=386 go test -shuffle=on -v -count=10 ./...
+
+      - name: go test (Linux 386)
+        if: runner.os == 'Linux'
+        run: |
+           sudo apt-get install gcc-multilib
+           sudo apt-get install g++-multilib
+           env CGO_ENABLED=1 GOARCH=386 go test -shuffle=on -v -count=10 ./...
 
       - name: go test race
         if: ${{ !startsWith(matrix.go, '1.18.') && !startsWith(matrix.go, '1.19.') }}
@@ -117,7 +139,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Run in freebsd
         uses: vmactions/freebsd-vm@v1
         with:
@@ -161,6 +183,10 @@ jobs:
             # Check cross-compiling FreeBSD binaries.
             env GOOS=freebsd GOARCH=amd64 go build -gcflags="github.com/ebitengine/purego/internal/fakecgo=-std" -v ./...
             env GOOS=freebsd GOARCH=arm64 go build -gcflags="github.com/ebitengine/purego/internal/fakecgo=-std" -v ./...
+
+            echo "=> go build (plugin)"
+            # Make sure that plugin buildmode works since we save the R15 register (#254)
+            go build -buildmode=plugin ./examples/libc
 
             echo "=> go mod vendor"
             mkdir /tmp/vendoring
