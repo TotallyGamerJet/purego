@@ -231,6 +231,10 @@ func callbackWrap(a *callbackArgs) {
 				}
 				return
 			case outSize > 16:
+				if isAllFloats, _ := isAllSameFloat(ret[0].Type()); isAllFloats {
+					reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
+					return
+				}
 				// We were passed the address to place the return struct
 				// so copy the Go struct into the provided memory
 				reflect.NewAt(ret[0].Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result))).Elem().Set(ret[0])

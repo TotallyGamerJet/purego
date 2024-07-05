@@ -641,8 +641,8 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnTwoDoubles returned %+v wanted %+v", ret, expected)
 				}
 			}
-			/*{
-				type ThreeDoubles struct{ a, b, c float64 }
+			{
+				type ThreeDoubles struct{ A, B, C float64 }
 				var ReturnThreeDoubles func(a, b, c float64) ThreeDoubles
 				register(&ReturnThreeDoubles, lib, "ReturnThreeDoubles")
 				expected := ThreeDoubles{1, 2, 3}
@@ -651,7 +651,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				}
 			}
 			{
-				type FourDoubles struct{ a, b, c, d float64 }
+				type FourDoubles struct{ A, B, C, D float64 }
 				var ReturnFourDoubles func(a, b, c, d float64) FourDoubles
 				register(&ReturnFourDoubles, lib, "ReturnFourDoubles")
 				expected := FourDoubles{1, 2, 3, 4}
@@ -659,7 +659,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnFourDoubles returned %+v wanted %+v", ret, expected)
 				}
 			}
-			{
+			/*{
 				type FourDoublesInternal struct {
 					f struct{ a, b float64 }
 					g struct{ c, d float64 }
