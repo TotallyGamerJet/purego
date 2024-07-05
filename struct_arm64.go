@@ -272,3 +272,47 @@ func isHVA(t reflect.Type) bool {
 		return false
 	}
 }
+
+func setStruct(a *callbackArgs, ret reflect.Value) {
+	outSize := ret.Type().Size()
+	switch {
+	case outSize == 0:
+		return
+	case outSize <= 8:
+		reflect.NewAt(ret.Type(), unsafe.Pointer(&a.result)).Elem().Set(ret)
+		if isAllFloats, numFields := isAllSameFloat(ret.Type()); isAllFloats && numFields == 2 {
+			a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
+			a.result &= math.MaxUint32 // clear the top bits since they contain the second argument
+		}
+		return
+	case outSize <= 16:
+		reflect.NewAt(ret.Type(), unsafe.Pointer(&a.result)).Elem().Set(ret)
+		if isAllFloats, numFields := isAllSameFloat(ret.Type()); isAllFloats {
+			switch numFields {
+			case 4:
+				a.result4 = a.result2 >> 32
+				a.result3 = a.result2 & math.MaxUint32
+				a.result2 = a.result >> 32
+				a.result &= math.MaxUint32
+			case 3:
+				a.result3 = a.result2 & math.MaxUint32
+				a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
+				a.result &= math.MaxUint32
+			case 2:
+				// two float64s are already in a.result and a.result2
+			default:
+				panic("unreachable")
+			}
+		}
+		return
+	default:
+		if isAllFloats, numFields := isAllSameFloat(ret.Type()); isAllFloats && numFields <= 4 {
+			reflect.NewAt(ret.Type(), unsafe.Pointer(&a.result)).Elem().Set(ret)
+			return
+		}
+		// We were passed the address to place the return struct
+		// so copy the Go struct into the provided memory
+		reflect.NewAt(ret.Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result))).Elem().Set(ret)
+		return
+	}
+}

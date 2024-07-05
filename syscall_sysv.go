@@ -6,7 +6,6 @@
 package purego
 
 import (
-	"math"
 	"reflect"
 	"runtime"
 	"sync"
@@ -197,47 +196,7 @@ func callbackWrap(a *callbackArgs) {
 		case reflect.UnsafePointer:
 			a.result = ret[0].Pointer()
 		case reflect.Struct:
-			outSize := ret[0].Type().Size()
-			switch {
-			case outSize == 0:
-				return
-			case outSize <= 8:
-				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
-				if isAllFloats, numFields := isAllSameFloat(ret[0].Type()); isAllFloats && numFields == 2 {
-					a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
-					a.result &= math.MaxUint32 // clear the top bits since they contain the second argument
-				}
-				return
-			case outSize <= 16:
-				reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
-				if isAllFloats, numFields := isAllSameFloat(ret[0].Type()); isAllFloats {
-					switch numFields {
-					case 4:
-						a.result4 = a.result2 >> 32
-						a.result3 = a.result2 & math.MaxUint32
-						a.result2 = a.result >> 32
-						a.result &= math.MaxUint32
-					case 3:
-						a.result3 = a.result2 & math.MaxUint32
-						a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
-						a.result &= math.MaxUint32
-					case 2:
-						// two float64s are already in a.result and a.result2
-					default:
-						panic("unreachable")
-					}
-				}
-				return
-			default:
-				if isAllFloats, numFields := isAllSameFloat(ret[0].Type()); isAllFloats && numFields <= 4 {
-					reflect.NewAt(ret[0].Type(), unsafe.Pointer(&a.result)).Elem().Set(ret[0])
-					return
-				}
-				// We were passed the address to place the return struct
-				// so copy the Go struct into the provided memory
-				reflect.NewAt(ret[0].Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result))).Elem().Set(ret[0])
-				return
-			}
+			setStruct(a, ret[0])
 		default:
 			panic("purego: unsupported kind: " + k.String())
 		}
