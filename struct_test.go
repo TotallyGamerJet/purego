@@ -680,23 +680,23 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					t.Fatalf("ReturnFiveDoubles returned %+v wanted %+v", ret, expected)
 				}
 			}
-			/*{
+			{
 				type OneFloatOneDouble struct {
-					a float32
+					A float32
 					_ float32
-					b float64
+					B float64
 				}
 				var ReturnOneFloatOneDouble func(a float32, b float64) OneFloatOneDouble
 				register(&ReturnOneFloatOneDouble, lib, "ReturnOneFloatOneDouble")
-				expected := OneFloatOneDouble{a: 1, b: 2}
+				expected := OneFloatOneDouble{A: 1, B: 2}
 				if ret := ReturnOneFloatOneDouble(1, 2); ret != expected {
 					t.Fatalf("ReturnOneFloatOneDouble returned %+v wanted %+v", ret, expected)
 				}
 			}
 			{
 				type OneDoubleOneFloat struct {
-					a float64
-					b float32
+					A float64
+					B float32
 				}
 				var ReturnOneDoubleOneFloat func(a float64, b float32) OneDoubleOneFloat
 				register(&ReturnOneDoubleOneFloat, lib, "ReturnOneDoubleOneFloat")
@@ -704,7 +704,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 				if ret := ReturnOneDoubleOneFloat(1, 2); ret != expected {
 					t.Fatalf("ReturnOneDoubleOneFloat returned %+v wanted %+v", ret, expected)
 				}
-			}*/
+			}
 			{
 				type Unaligned1 struct {
 					A int8
