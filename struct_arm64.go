@@ -281,7 +281,7 @@ func setStruct(a *callbackArgs, ret reflect.Value) {
 	case outSize <= 8:
 		reflect.NewAt(ret.Type(), unsafe.Pointer(&a.result)).Elem().Set(ret)
 		if isAllFloats, numFields := isAllSameFloat(ret.Type()); isAllFloats && numFields == 2 {
-			a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
+			a.result2 = a.result >> 32 // expanding two float32s into a.result and a.result2
 			a.result &= math.MaxUint32 // clear the top bits since they contain the second argument
 		}
 		return
@@ -296,7 +296,7 @@ func setStruct(a *callbackArgs, ret reflect.Value) {
 				a.result &= math.MaxUint32
 			case 3:
 				a.result3 = a.result2 & math.MaxUint32
-				a.result2 = a.result >> 32 // TODO: maybe just grab the fields?
+				a.result2 = a.result >> 32
 				a.result &= math.MaxUint32
 			case 2:
 				// two float64s are already in a.result and a.result2
