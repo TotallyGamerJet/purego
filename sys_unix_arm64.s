@@ -60,10 +60,6 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	BL crosscall2(SB)
 
 	// Get callback result.
-	FMOVD $0, F0                          // TODO: remove before merge
-	FMOVD $0, F1
-	FMOVD $0, F2
-	FMOVD $0, F3
 	MOVD  $(callbackArgs__size)(RSP), R13
 	MOVD  callbackArgs_result(R13), R0
 	MOVD  callbackArgs_result2(R13), R1
