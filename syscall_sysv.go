@@ -6,6 +6,7 @@
 package purego
 
 import (
+	"fmt"
 	"reflect"
 	"runtime"
 	"sync"
@@ -166,7 +167,6 @@ func callbackWrap(a *callbackArgs) {
 			args[i] = reflect.Zero(fnType.In(i))
 			continue
 		default:
-
 			if intsN >= numOfIntegerRegisters() {
 				pos = stack
 				stack++
@@ -178,6 +178,7 @@ func callbackWrap(a *callbackArgs) {
 		}
 		args[i] = reflect.NewAt(fnType.In(i), unsafe.Pointer(&frame[pos])).Elem()
 	}
+	fmt.Println(args)
 	ret := fn.Call(args)
 	if len(ret) > 0 {
 		switch k := ret[0].Kind(); k {

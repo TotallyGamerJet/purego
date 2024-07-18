@@ -4,6 +4,7 @@
 package purego
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"unsafe"
@@ -268,5 +269,55 @@ func placeStack(v reflect.Value, addStack func(uintptr)) {
 		default:
 			panic("purego: unsupported kind " + f.Kind().String())
 		}
+	}
+}
+
+func setStruct(a *callbackArgs, ret reflect.Value) {
+	fmt.Println(ret)
+	/*outSize := ret.Type().Size()
+	fmt.Println(ret, outSize)
+	switch {
+	case outSize == 0:
+		return
+	case outSize <= 8:
+		reflect.NewAt(ret.Type(), unsafe.Pointer(&a.result)).Elem().Set(ret)
+	default:
+		panic("todo")
+	}*/
+	if ret.Type().Size() == 0 {
+		return
+	}
+
+	// if greater than 64 bytes place on stack
+	if ret.Type().Size() > 8*8 {
+		panic("todo")
+		// placeStack(v, addStack)
+		return
+	}
+
+	addFloat := func(_ uintptr) {
+		panic("todo float")
+	}
+	numInts := 0
+	addInt := func(x uintptr) {
+		switch numInts {
+		case 0:
+			a.result = x
+		case 1:
+			a.result2 = x
+		// case 2:
+		//	a.result3 = x
+		// case 3:
+		//	a.result4 = x
+		default:
+			panic("unreachable")
+		}
+		numInts++
+	}
+
+	placeOnStack := postMerger(ret.Type()) || !tryPlaceRegister(ret, addFloat, addInt)
+	if placeOnStack {
+		// placeStack(v, addStack)
+		panic("todo")
 	}
 }

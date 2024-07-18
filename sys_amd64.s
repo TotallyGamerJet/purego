@@ -152,7 +152,8 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 
 	// Get callback result.
 	MOVQ (24+callbackArgs_result)(SP), AX
-	ADDQ $(24+callbackArgs__size), SP     // remove callbackArgs struct
+	MOVQ (24+callbackArgs_result2)(SP), DX
+	ADDQ $(24+callbackArgs__size), SP      // remove callbackArgs struct
 
 	POP_REGS_HOST_TO_ABI0()
 
