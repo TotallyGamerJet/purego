@@ -310,14 +310,15 @@ func setStruct(a *callbackArgs, ret reflect.Value) {
 		// case 3:
 		//	a.result4 = x
 		default:
-			panic("unreachable")
+			fmt.Println("place on stack")
+			// panic("unreachable")
 		}
 		numInts++
 	}
 
 	placeOnStack := postMerger(ret.Type()) || !tryPlaceRegister(ret, addFloat, addInt)
 	if placeOnStack {
-		// placeStack(v, addStack)
-		panic("todo")
+		// a.result contains the pointer to write into
+		reflect.NewAt(ret.Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result))).Elem().Set(ret)
 	}
 }

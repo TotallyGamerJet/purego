@@ -151,6 +151,8 @@ func callbackWrap(a *callbackArgs) {
 	// stack points to the index into frame of the current stack element.
 	// The stack begins after the float and integer registers.
 	stack := numOfIntegerRegisters() + numOfFloats
+	a.result = frame[0]
+	fmt.Println(frame[numOfFloats : numOfFloats+3])
 	for i := range args {
 		var pos int
 		switch fnType.In(i).Kind() {
@@ -178,7 +180,6 @@ func callbackWrap(a *callbackArgs) {
 		}
 		args[i] = reflect.NewAt(fnType.In(i), unsafe.Pointer(&frame[pos])).Elem()
 	}
-	fmt.Println(args)
 	ret := fn.Call(args)
 	if len(ret) > 0 {
 		switch k := ret[0].Kind(); k {

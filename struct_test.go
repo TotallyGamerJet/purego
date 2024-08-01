@@ -495,7 +495,7 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 		register func(fptr interface{}, handle uintptr, name string)
 	}{
 		{name: "RegisterLibFunc", register: purego.RegisterLibFunc},
-		{name: "NativeFunc", register: func(fptr interface{}, _ uintptr, _ string) {
+		{name: "GoCallbackFunc", register: func(fptr interface{}, _ uintptr, _ string) {
 			fn := reflect.MakeFunc(reflect.TypeOf(fptr).Elem(), func(args []reflect.Value) []reflect.Value {
 				retType := reflect.TypeOf(fptr).Elem().Out(0)
 				ret := reflect.New(retType).Elem()
