@@ -5,9 +5,8 @@ package main
 
 import (
 	"runtime"
+	"syscall"
 	"unsafe"
-
-	"golang.org/x/sys/windows"
 
 	"github.com/ebitengine/purego"
 )
@@ -78,10 +77,14 @@ var (
 )
 
 func init() {
-	kernel32 := windows.NewLazySystemDLL("kernel32.dll").Handle()
+	// Use [syscall.NewLazyDLL] here to avoid external dependencies (#270).
+	// For actual use cases, [golang.org/x/sys/windows.NewLazySystemDLL] is recommended.
+	kernel32 := syscall.NewLazyDLL("kernel32.dll").Handle()
 	purego.RegisterLibFunc(&GetModuleHandle, kernel32, "GetModuleHandleW")
 
-	user32 := windows.NewLazySystemDLL("user32.dll").Handle()
+	// Use [syscall.NewLazyDLL] here to avoid external dependencies (#270).
+	// For actual use cases, [golang.org/x/sys/windows.NewLazySystemDLL] is recommended.
+	user32 := syscall.NewLazyDLL("user32.dll").Handle()
 	purego.RegisterLibFunc(&RegisterClassEx, user32, "RegisterClassExW")
 	purego.RegisterLibFunc(&CreateWindowEx, user32, "CreateWindowExW")
 	purego.RegisterLibFunc(&AdjustWindowRect, user32, "AdjustWindowRect")
@@ -96,12 +99,15 @@ func init() {
 }
 
 func main() {
-	className := windows.StringToUTF16Ptr("Sample Window Class")
+	className, err := syscall.UTF16PtrFromString("Sample Window Class")
+	if err != nil {
+		panic(err)
+	}
 	inst := GetModuleHandle(className)
 
 	wc := WNDCLASSEX{
 		Size:      uint32(unsafe.Sizeof(WNDCLASSEX{})),
-		WndProc:   windows.NewCallback(wndProc),
+		WndProc:   syscall.NewCallback(wndProc),
 		Instance:  inst,
 		ClassName: className,
 	}
@@ -114,16 +120,20 @@ func main() {
 		Right:  320,
 		Bottom: 240,
 	}
+	title, err := syscall.UTF16PtrFromString("My Title")
+	if err != nil {
+		panic(err)
+	}
 	AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, false)
 	hwnd := CreateWindowEx(
 		0, className,
-		windows.StringToUTF16Ptr("My Title"),
+		title,
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, int(wr.Right-wr.Left), int(wr.Bottom-wr.Top),
 		0, 0, inst, nil,
 	)
 	if hwnd == 0 {
-		panic(windows.GetLastError())
+		panic(syscall.GetLastError())
 	}
 
 	ShowWindow(hwnd, SW_SHOW)
