@@ -374,3 +374,12 @@ struct FourInt32s {
 int32_t FourInt32s(struct FourInt32s s) {
     return s.f0 + s.f1 + s.f2 + s.f3;
 }
+
+struct TwoUnsafes {
+    void *u0;
+    void *u1;
+};
+
+int32_t TwoUnsafes(struct TwoUnsafes s) {
+    return *((int32_t *)s.u0) + *((int32_t *)s.u1);
+}
