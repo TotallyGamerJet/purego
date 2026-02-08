@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2022 The Ebitengine Authors
 
-//go:build darwin || freebsd || linux || windows
+//go:build darwin || freebsd || linux || netbsd || windows
 
 package purego
 
@@ -14,6 +14,12 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego/internal/strings"
+	"github.com/ebitengine/purego/internal/xreflect"
+)
+
+const (
+	align8ByteMask = 7 // Mask for 8-byte alignment: (val + 7) &^ 7
+	align8ByteSize = 8 // 8-byte alignment boundary
 )
 
 var thePool = sync.Pool{New: func() any {
@@ -93,6 +99,9 @@ func RegisterLibFunc(fptr any, handle uintptr, name string) {
 // it does not support aligning fields properly. It is therefore the responsibility of the caller to ensure
 // that all padding is added to the Go struct to match the C one. See `BoolStructFn` in struct_test.go for an example.
 //
+// On Darwin ARM64, purego handles proper alignment of struct arguments when passing them on the stack,
+// following the C ABI's byte-level packing rules.
+//
 // # Example
 //
 // All functions below call this C function:
@@ -111,6 +120,7 @@ func RegisterLibFunc(fptr any, handle uintptr, name string) {
 //
 // [Cgo rules]: https://pkg.go.dev/cmd/cgo#hdr-Go_references_to_C
 func RegisterFunc(fptr any, cfn uintptr) {
+	const is32bit = unsafe.Sizeof(uintptr(0)) == 4
 	fn := reflect.ValueOf(fptr).Elem()
 	ty := fn.Type()
 	if ty.Kind() != reflect.Func {
@@ -123,7 +133,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		panic("purego: cfn is nil")
 	}
 	if ty.NumOut() == 1 && (ty.Out(0).Kind() == reflect.Float32 || ty.Out(0).Kind() == reflect.Float64) &&
-		runtime.GOARCH != "arm64" && runtime.GOARCH != "amd64" {
+		runtime.GOARCH != "arm" && runtime.GOARCH != "arm64" && runtime.GOARCH != "386" && runtime.GOARCH != "amd64" && runtime.GOARCH != "loong64" && runtime.GOARCH != "riscv64" {
 		panic("purego: float returns are not supported")
 	}
 	{
@@ -157,11 +167,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 					stack++
 				}
 			case reflect.Float32, reflect.Float64:
-				const is32bit = unsafe.Sizeof(uintptr(0)) == 4
-				if is32bit {
-					panic("purego: floats only supported on 64bit platforms")
-				}
-				if floats < numOfFloats {
+				if floats < numOfFloatRegisters() {
 					floats++
 				} else {
 					stack++
@@ -199,15 +205,29 @@ func RegisterFunc(fptr any, cfn uintptr) {
 				ints++
 			}
 		}
+
 		sizeOfStack := maxArgs - numOfIntegerRegisters()
-		if stack > sizeOfStack {
-			panic("purego: too many arguments")
+		// On Darwin ARM64, use byte-based validation since arguments pack efficiently.
+		// See https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms
+		if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+			stackBytes := estimateStackBytes(ty)
+			maxStackBytes := sizeOfStack * 8
+			if stackBytes > maxStackBytes {
+				panic("purego: too many stack arguments")
+			}
+		} else {
+			if stack > sizeOfStack {
+				panic("purego: too many stack arguments")
+			}
 		}
 	}
+
 	v := reflect.MakeFunc(ty, func(args []reflect.Value) (results []reflect.Value) {
 		var sysargs [maxArgs]uintptr
-		stack := sysargs[numOfIntegerRegisters():]
-		var floats [numOfFloats]uintptr
+		// Use maxArgs instead of numOfFloatRegisters() to keep this code path allocation-free,
+		// since numOfFloatRegisters() is a function call, not a constant.
+		// maxArgs is always greater than or equal to numOfFloatRegisters() so this is safe.
+		var floats [maxArgs]uintptr
 		var numInts int
 		var numFloats int
 		var numStack int
@@ -215,7 +235,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		if runtime.GOARCH == "arm64" || runtime.GOOS != "windows" {
 			// Windows arm64 uses the same calling convention as macOS and Linux
 			addStack = func(x uintptr) {
-				stack[numStack] = x
+				sysargs[numOfIntegerRegisters()+numStack] = x
 				numStack++
 			}
 			addInt = func(x uintptr) {
@@ -227,7 +247,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 				}
 			}
 			addFloat = func(x uintptr) {
-				if numFloats < len(floats) {
+				if numFloats < numOfFloatRegisters() {
 					floats[numFloats] = x
 					numFloats++
 				} else {
@@ -257,7 +277,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		var arm64_r8 uintptr
 		if ty.NumOut() == 1 && ty.Out(0).Kind() == reflect.Struct {
 			outType := ty.Out(0)
-			if runtime.GOARCH == "amd64" && outType.Size() > maxRegAllocStructSize {
+			if (runtime.GOARCH == "amd64" || runtime.GOARCH == "loong64" || runtime.GOARCH == "riscv64") && outType.Size() > maxRegAllocStructSize {
 				val := reflect.New(outType)
 				keepAlive = append(keepAlive, val)
 				addInt(val.Pointer())
@@ -271,7 +291,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 			}
 		}
 		for i, v := range args {
-			if variadic, ok := args[i].Interface().([]any); ok {
+			if variadic, ok := xreflect.TypeAssert[[]any](args[i]); ok {
 				if i != len(args)-1 {
 					panic("purego: can only expand last parameter")
 				}
@@ -280,22 +300,29 @@ func RegisterFunc(fptr any, cfn uintptr) {
 				}
 				continue
 			}
+			// Check if we need to start Darwin ARM64 C-style stack packing
+			if runtime.GOARCH == "arm64" && runtime.GOOS == "darwin" && shouldBundleStackArgs(v, numInts, numFloats) {
+				// Collect and separate remaining args into register vs stack
+				stackArgs, newKeepAlive := collectStackArgs(args, i, numInts, numFloats,
+					keepAlive, addInt, addFloat, addStack, &numInts, &numFloats, &numStack)
+				keepAlive = newKeepAlive
+
+				// Bundle stack arguments with C-style packing
+				bundleStackArgs(stackArgs, addStack)
+				break
+			}
 			keepAlive = addValue(v, keepAlive, addInt, addFloat, addStack, &numInts, &numFloats, &numStack)
 		}
 
 		syscall := thePool.Get().(*syscall15Args)
 		defer thePool.Put(syscall)
 
-		if runtime.GOARCH == "arm64" || runtime.GOOS != "windows" {
+		if runtime.GOARCH == "loong64" || runtime.GOARCH == "riscv64" {
+			syscall.Set(cfn, sysargs[:], floats[:], 0)
+			runtime_cgocall(syscall15XABI0, unsafe.Pointer(syscall))
+		} else if runtime.GOARCH == "arm64" || runtime.GOOS != "windows" {
 			// Use the normal arm64 calling convention even on Windows
-			*syscall = syscall15Args{
-				cfn,
-				sysargs[0], sysargs[1], sysargs[2], sysargs[3], sysargs[4], sysargs[5],
-				sysargs[6], sysargs[7], sysargs[8], sysargs[9], sysargs[10], sysargs[11],
-				sysargs[12], sysargs[13], sysargs[14],
-				floats[0], floats[1], floats[2], floats[3], floats[4], floats[5], floats[6], floats[7],
-				arm64_r8,
-			}
+			syscall.Set(cfn, sysargs[:], floats[:], arm64_r8)
 			runtime_cgocall(syscall15XABI0, unsafe.Pointer(syscall))
 		} else {
 			*syscall = syscall15Args{}
@@ -331,11 +358,20 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		case reflect.Float32:
 			// NOTE: syscall.r2 is only the floating return value on 64bit platforms.
 			// On 32bit platforms syscall.r2 is the upper part of a 64bit return.
-			v.SetFloat(float64(math.Float32frombits(uint32(syscall.f1))))
+			// On 386, x87 FPU returns floats as float64 in ST(0), so we read as float64 and convert.
+			if runtime.GOARCH == "386" {
+				v.SetFloat(math.Float64frombits(uint64(syscall.f1) | (uint64(syscall.f2) << 32)))
+			} else {
+				v.SetFloat(float64(math.Float32frombits(uint32(syscall.f1))))
+			}
 		case reflect.Float64:
 			// NOTE: syscall.r2 is only the floating return value on 64bit platforms.
 			// On 32bit platforms syscall.r2 is the upper part of a 64bit return.
-			v.SetFloat(math.Float64frombits(uint64(syscall.f1)))
+			if is32bit {
+				v.SetFloat(math.Float64frombits(uint64(syscall.f1) | (uint64(syscall.f2) << 32)))
+			} else {
+				v.SetFloat(math.Float64frombits(uint64(syscall.f1)))
+			}
 		case reflect.Struct:
 			v = getStruct(outType, *syscall)
 		default:
@@ -353,6 +389,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 }
 
 func addValue(v reflect.Value, keepAlive []any, addInt func(x uintptr), addFloat func(x uintptr), addStack func(x uintptr), numInts *int, numFloats *int, numStack *int) []any {
+	const is32bit = unsafe.Sizeof(uintptr(0)) == 4
 	switch v.Kind() {
 	case reflect.String:
 		ptr := strings.CString(v.String())
@@ -376,7 +413,13 @@ func addValue(v reflect.Value, keepAlive []any, addInt func(x uintptr), addFloat
 	case reflect.Float32:
 		addFloat(uintptr(math.Float32bits(float32(v.Float()))))
 	case reflect.Float64:
-		addFloat(uintptr(math.Float64bits(v.Float())))
+		if is32bit {
+			bits := math.Float64bits(v.Float())
+			addFloat(uintptr(bits))
+			addFloat(uintptr(bits >> 32))
+		} else {
+			addFloat(uintptr(math.Float64bits(v.Float())))
+		}
 	case reflect.Struct:
 		keepAlive = addStruct(v, numInts, numFloats, numStack, addInt, addFloat, addStack, keepAlive)
 	default:
@@ -438,18 +481,67 @@ func checkStructFieldsSupported(ty reflect.Type) {
 }
 
 func roundUpTo8(val uintptr) uintptr {
-	return (val + 7) &^ 7
+	return (val + align8ByteMask) &^ align8ByteMask
+}
+
+func numOfFloatRegisters() int {
+	switch runtime.GOARCH {
+	case "amd64", "arm64", "loong64", "riscv64":
+		return 8
+	case "arm":
+		return 16
+	case "386":
+		// i386 SysV ABI passes all arguments on the stack, including floats
+		return 0
+	default:
+		// since this platform isn't supported and can therefore only access
+		// integer registers it is safest to return 8
+		return 8
+	}
 }
 
 func numOfIntegerRegisters() int {
 	switch runtime.GOARCH {
-	case "arm64":
+	case "arm64", "loong64", "riscv64":
 		return 8
 	case "amd64":
 		return 6
+	case "arm":
+		return 4
+	case "386":
+		// i386 SysV ABI passes all arguments on the stack
+		return 0
 	default:
 		// since this platform isn't supported and can therefore only access
 		// integer registers it is fine to return the maxArgs
 		return maxArgs
 	}
+}
+
+// estimateStackBytes estimates stack bytes needed for Darwin ARM64 validation.
+// This is a conservative estimate used only for early error detection.
+func estimateStackBytes(ty reflect.Type) int {
+	var numInts, numFloats int
+	var stackBytes int
+
+	for i := 0; i < ty.NumIn(); i++ {
+		arg := ty.In(i)
+		size := int(arg.Size())
+
+		// Check if this goes to register or stack
+		usesInt := arg.Kind() != reflect.Float32 && arg.Kind() != reflect.Float64
+		if usesInt && numInts < numOfIntegerRegisters() {
+			numInts++
+		} else if !usesInt && numFloats < numOfFloatRegisters() {
+			numFloats++
+		} else {
+			// Goes to stack - accumulate total bytes
+			stackBytes += size
+		}
+	}
+	// Round total to 8-byte boundary
+	if stackBytes > 0 && stackBytes%align8ByteSize != 0 {
+		stackBytes = int(roundUpTo8(uintptr(stackBytes)))
+	}
+	return stackBytes
 }

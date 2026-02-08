@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2022 The Ebitengine Authors
 
-//go:build darwin || freebsd || linux || windows
+//go:build darwin || freebsd || linux || netbsd || windows
 
 package main
 
@@ -16,10 +16,12 @@ func getSystemLibrary() string {
 	switch runtime.GOOS {
 	case "darwin":
 		return "/usr/lib/libSystem.B.dylib"
-	case "linux":
-		return "libc.so.6"
 	case "freebsd":
 		return "libc.so.7"
+	case "linux":
+		return "libc.so.6"
+	case "netbsd":
+		return "libc.so"
 	case "windows":
 		return "ucrtbase.dll"
 	default:

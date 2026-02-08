@@ -374,8 +374,9 @@ func TestRegisterFunc_structArgs(t *testing.T) {
 		}
 		var Array4CharsFn func(chars Array4Chars) int32
 		purego.RegisterLibFunc(&Array4CharsFn, lib, "Array4Chars")
-		if ret := Array4CharsFn(Array4Chars{a: [...]int8{100, -127, 4, -100}}); ret != expectedSigned {
-			t.Fatalf("Array4CharsFn returned %#x wanted %#x", ret, expectedSigned)
+		const expectedSum = 1 + 2 + 4 + 8
+		if ret := Array4CharsFn(Array4Chars{a: [...]int8{1, 2, 4, 8}}); ret != expectedSum {
+			t.Fatalf("Array4CharsFn returned %d wanted %d", ret, expectedSum)
 		}
 	}
 	{
@@ -462,6 +463,41 @@ func TestRegisterFunc_structArgs(t *testing.T) {
 		const expected = 1_000_000 + 53 + 71 + 8
 		if ret := GoUint4Fn(GoUint4{1_000_000, 53, 71, 8}); ret != expected {
 			t.Fatalf("GoUint4Fn returned %d wanted %#x", ret, expected)
+		}
+	}
+	{
+		type OneLong struct{ a uintptr }
+		var TakeGoUintAndReturn func(a OneLong) uint64
+		purego.RegisterLibFunc(&TakeGoUintAndReturn, lib, "TakeGoUintAndReturn")
+		expected := uint64(7)
+		if ret := TakeGoUintAndReturn(OneLong{7}); ret != expected {
+			t.Fatalf("TakeGoUintAndReturn returned %+v wanted %+v", ret, expected)
+		}
+	}
+	{
+		type FloatAndBool struct {
+			x float32
+			y bool
+		}
+		var FloatAndBoolFn func(FloatAndBool) int32
+		purego.RegisterLibFunc(&FloatAndBoolFn, lib, "FloatAndBool")
+		if ret := FloatAndBoolFn(FloatAndBool{x: 12345.0, y: true}); ret != 1 {
+			t.Fatalf("FloatAndBool(y: true) = %d, want 1", ret)
+		}
+		if ret := FloatAndBoolFn(FloatAndBool{x: 12345.0, y: false}); ret != 0 {
+			t.Fatalf("FloatAndBool(y: false) = %d, want 0", ret)
+		}
+	}
+	{
+		type FourInt32s struct {
+			f0, f1, f2, f3 int32
+		}
+		var FourInt32sFn func(FourInt32s) int32
+		purego.RegisterLibFunc(&FourInt32sFn, lib, "FourInt32s")
+		result := FourInt32sFn(FourInt32s{100, -127, 4, -100})
+		const want = 100 - 127 + 4 - 100
+		if result != want {
+			t.Fatalf("FourInt32s returned %d wanted %d", result, want)
 		}
 	}
 }

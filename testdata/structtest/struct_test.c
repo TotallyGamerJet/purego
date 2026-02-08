@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2024 The Ebitengine Authors
 
-#include "stdint.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #if defined(__x86_64__) || defined(__aarch64__)
 typedef int64_t GoInt;
@@ -347,4 +349,28 @@ struct GoUint4 {
 
 GoUint GoUint4(struct GoUint4 g) {
     return g.a + g.b + g.c + g.d;
+}
+
+GoUint TakeGoUintAndReturn(GoUint a) {
+    return a;
+}
+
+struct FloatAndBool {
+    float value;
+    _Bool has_value;
+};
+
+int FloatAndBool(struct FloatAndBool f) {
+    return f.has_value;
+}
+
+struct FourInt32s {
+    int32_t f0;
+    int32_t f1;
+    int32_t f2;
+    int32_t f3;
+};
+
+int32_t FourInt32s(struct FourInt32s s) {
+    return s.f0 + s.f1 + s.f2 + s.f3;
 }
