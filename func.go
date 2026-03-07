@@ -64,7 +64,7 @@ func RegisterLibFunc(fptr any, handle uintptr, name string) {
 //	int64 <=> int64_t
 //	float32 <=> float
 //	float64 <=> double
-//	struct <=> struct (WIP - darwin only)
+//	struct <=> struct (darwin amd64/arm64, linux amd64/arm64)
 //	func <=> C function
 //	unsafe.Pointer, *T <=> void*
 //	[]T => void*
@@ -133,7 +133,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		panic("purego: cfn is nil")
 	}
 	if ty.NumOut() == 1 && (ty.Out(0).Kind() == reflect.Float32 || ty.Out(0).Kind() == reflect.Float64) &&
-		runtime.GOARCH != "arm" && runtime.GOARCH != "arm64" && runtime.GOARCH != "386" && runtime.GOARCH != "amd64" && runtime.GOARCH != "loong64" && runtime.GOARCH != "riscv64" {
+		runtime.GOARCH != "arm" && runtime.GOARCH != "arm64" && runtime.GOARCH != "386" && runtime.GOARCH != "amd64" && runtime.GOARCH != "loong64" && runtime.GOARCH != "ppc64le" && runtime.GOARCH != "riscv64" && runtime.GOARCH != "s390x" {
 		panic("purego: float returns are not supported")
 	}
 	{
@@ -173,9 +173,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 					stack++
 				}
 			case reflect.Struct:
-				if runtime.GOOS != "darwin" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
-					panic("purego: struct arguments are only supported on darwin amd64 & arm64")
-				}
+				ensureStructSupportedForRegisterFunc()
 				if arg.Size() == 0 {
 					continue
 				}
@@ -194,9 +192,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 			}
 		}
 		if ty.NumOut() == 1 && ty.Out(0).Kind() == reflect.Struct {
-			if runtime.GOOS != "darwin" {
-				panic("purego: struct return values only supported on darwin arm64 & amd64")
-			}
+			ensureStructSupportedForRegisterFunc()
 			outType := ty.Out(0)
 			checkStructFieldsSupported(outType)
 			if runtime.GOARCH == "amd64" && outType.Size() > maxRegAllocStructSize {
@@ -277,7 +273,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		var arm64_r8 uintptr
 		if ty.NumOut() == 1 && ty.Out(0).Kind() == reflect.Struct {
 			outType := ty.Out(0)
-			if (runtime.GOARCH == "amd64" || runtime.GOARCH == "loong64" || runtime.GOARCH == "riscv64") && outType.Size() > maxRegAllocStructSize {
+			if (runtime.GOARCH == "amd64" || runtime.GOARCH == "loong64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "riscv64" || runtime.GOARCH == "s390x") && outType.Size() > maxRegAllocStructSize {
 				val := reflect.New(outType)
 				keepAlive = append(keepAlive, val)
 				addInt(val.Pointer())
@@ -317,7 +313,7 @@ func RegisterFunc(fptr any, cfn uintptr) {
 		syscall := thePool.Get().(*syscall15Args)
 		defer thePool.Put(syscall)
 
-		if runtime.GOARCH == "loong64" || runtime.GOARCH == "riscv64" {
+		if runtime.GOARCH == "loong64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "riscv64" || runtime.GOARCH == "s390x" {
 			syscall.Set(cfn, sysargs[:], floats[:], 0)
 			runtime_cgocall(syscall15XABI0, unsafe.Pointer(syscall))
 		} else if runtime.GOARCH == "arm64" || runtime.GOOS != "windows" {
@@ -359,9 +355,17 @@ func RegisterFunc(fptr any, cfn uintptr) {
 			// NOTE: syscall.r2 is only the floating return value on 64bit platforms.
 			// On 32bit platforms syscall.r2 is the upper part of a 64bit return.
 			// On 386, x87 FPU returns floats as float64 in ST(0), so we read as float64 and convert.
-			if runtime.GOARCH == "386" {
+			// On PPC64LE, C ABI converts float32 to double in FPR, so we read as float64.
+			// On S390X (big-endian), float32 is in upper 32 bits of the 64-bit FP register.
+			switch runtime.GOARCH {
+			case "386":
 				v.SetFloat(math.Float64frombits(uint64(syscall.f1) | (uint64(syscall.f2) << 32)))
-			} else {
+			case "ppc64le":
+				v.SetFloat(math.Float64frombits(uint64(syscall.f1)))
+			case "s390x":
+				// S390X is big-endian: float32 in upper 32 bits of 64-bit register
+				v.SetFloat(float64(math.Float32frombits(uint32(syscall.f1 >> 32))))
+			default:
 				v.SetFloat(float64(math.Float32frombits(uint32(syscall.f1))))
 			}
 		case reflect.Float64:
@@ -411,7 +415,12 @@ func addValue(v reflect.Value, keepAlive []any, addInt func(x uintptr), addFloat
 			addInt(0)
 		}
 	case reflect.Float32:
-		addFloat(uintptr(math.Float32bits(float32(v.Float()))))
+		// On S390X big-endian, float32 goes in upper 32 bits of 64-bit FP register
+		if runtime.GOARCH == "s390x" {
+			addFloat(uintptr(math.Float32bits(float32(v.Float()))) << 32)
+		} else {
+			addFloat(uintptr(math.Float32bits(float32(v.Float()))))
+		}
 	case reflect.Float64:
 		if is32bit {
 			bits := math.Float64bits(v.Float())
@@ -473,10 +482,20 @@ func checkStructFieldsSupported(ty reflect.Type) {
 		switch f.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			reflect.Uintptr, reflect.Ptr, reflect.UnsafePointer, reflect.Float64, reflect.Float32:
+			reflect.Uintptr, reflect.Ptr, reflect.UnsafePointer, reflect.Float64, reflect.Float32,
+			reflect.Bool:
 		default:
 			panic(fmt.Sprintf("purego: struct field type %s is not supported", f))
 		}
+	}
+}
+
+func ensureStructSupportedForRegisterFunc() {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		panic("purego: struct arguments are only supported on amd64 and arm64")
+	}
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+		panic("purego: struct arguments are only supported on darwin and linux")
 	}
 }
 
@@ -486,8 +505,10 @@ func roundUpTo8(val uintptr) uintptr {
 
 func numOfFloatRegisters() int {
 	switch runtime.GOARCH {
-	case "amd64", "arm64", "loong64", "riscv64":
+	case "amd64", "arm64", "loong64", "ppc64le", "riscv64":
 		return 8
+	case "s390x":
+		return 4
 	case "arm":
 		return 16
 	case "386":
@@ -502,10 +523,13 @@ func numOfFloatRegisters() int {
 
 func numOfIntegerRegisters() int {
 	switch runtime.GOARCH {
-	case "arm64", "loong64", "riscv64":
+	case "arm64", "loong64", "ppc64le", "riscv64":
 		return 8
 	case "amd64":
 		return 6
+	case "s390x":
+		// S390X uses R2-R6 for integer arguments
+		return 5
 	case "arm":
 		return 4
 	case "386":

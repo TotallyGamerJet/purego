@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2022 The Ebitengine Authors
 
-//go:build darwin || freebsd || (linux && (386 || amd64 || arm || arm64 || loong64 || riscv64)) || netbsd
+// TODO: remove s390x cgo dependency once golang/go#77449 is resolved
+//go:build darwin || freebsd || (linux && (386 || amd64 || arm || arm64 || loong64 || ppc64le || riscv64 || (cgo && s390x))) || netbsd
 
 package purego
 
@@ -27,7 +28,7 @@ func syscall_syscall15X(fn, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a
 	}
 
 	runtime_cgocall(syscall15XABI0, unsafe.Pointer(args))
-	return args.a1, args.a2, 0
+	return args.a1, args.a2, args.a3
 }
 
 // NewCallback converts a Go function to a function pointer conforming to the C calling convention.
@@ -58,25 +59,6 @@ var cbs struct {
 	lock  sync.Mutex
 	numFn int                  // the number of functions currently in cbs.funcs
 	funcs [maxCB]reflect.Value // the saved callbacks
-}
-
-type callbackArgs struct {
-	index uintptr
-	// args points to the argument block.
-	//
-	// The structure of the arguments goes
-	// float registers followed by the
-	// integer registers followed by the stack.
-	//
-	// This variable is treated as a continuous
-	// block of memory containing all of the arguments
-	// for this callback.
-	args unsafe.Pointer
-	// Below are out-args from callbackWrap
-	result  uintptr
-	result2 uintptr // TODO: make array?
-	result3 uintptr
-	result4 uintptr
 }
 
 func compileCallback(fn any) uintptr {
@@ -150,13 +132,25 @@ func callbackWrap(a *callbackArgs) {
 	fnType := fn.Type()
 	args := make([]reflect.Value, fnType.NumIn())
 	frame := (*[callbackMaxFrame]uintptr)(a.args)
+	// stackFrame points to stack-passed arguments. On most architectures this is
+	// contiguous with frame (after register args), but on ppc64le it's separate.
+	var stackFrame *[callbackMaxFrame]uintptr
+	if sf := a.stackFrame(); sf != nil {
+		// Only ppc64le uses separate stackArgs pointer due to NOSPLIT constraints
+		stackFrame = (*[callbackMaxFrame]uintptr)(sf)
+	}
 	// floatsN and intsN track the number of register slots used, not argument count.
 	// This distinction matters on ARM32 where float64 uses 2 slots (32-bit registers).
 	var floatsN int
 	var intsN int
-	// stackSlot points to the index into frame of the current stack element.
-	// The stack begins after the float and integer registers.
+	// stackSlot points to the index into frame (or stackFrame) of the current stack element.
+	// When stackFrame is nil, stack begins after float and integer registers in frame.
+	// When stackFrame is not nil (ppc64le), stackSlot indexes into stackFrame starting at 0.
 	stackSlot := numOfIntegerRegisters() + numOfFloatRegisters()
+	if stackFrame != nil {
+		// ppc64le: stackArgs is a separate pointer, indices start at 0
+		stackSlot = 0
+	}
 	// stackByteOffset tracks the byte offset within the stack area for Darwin ARM64
 	// tight packing. On Darwin ARM64, C passes small types packed on the stack.
 	stackByteOffset := uintptr(0)
@@ -171,12 +165,26 @@ func callbackWrap(a *callbackArgs) {
 				if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 					// Darwin ARM64: read from packed stack with proper alignment
 					args[i] = callbackArgFromStack(a.args, stackSlot, &stackByteOffset, inType)
+				} else if stackFrame != nil {
+					// ppc64le/s390x: stack args are in separate stackFrame
+					if runtime.GOARCH == "s390x" {
+						// s390x big-endian: sub-8-byte values are right-justified
+						args[i] = callbackArgFromSlotBigEndian(unsafe.Pointer(&stackFrame[stackSlot]), inType)
+					} else {
+						args[i] = reflect.NewAt(inType, unsafe.Pointer(&stackFrame[stackSlot])).Elem()
+					}
+					stackSlot += slots
 				} else {
 					args[i] = reflect.NewAt(inType, unsafe.Pointer(&frame[stackSlot])).Elem()
 					stackSlot += slots
 				}
 			} else {
-				args[i] = reflect.NewAt(inType, unsafe.Pointer(&frame[floatsN])).Elem()
+				if runtime.GOARCH == "s390x" {
+					// s390x big-endian: float32 is right-justified in 8-byte FPR slot
+					args[i] = callbackArgFromSlotBigEndian(unsafe.Pointer(&frame[floatsN]), inType)
+				} else {
+					args[i] = reflect.NewAt(inType, unsafe.Pointer(&frame[floatsN])).Elem()
+				}
 			}
 			floatsN += slots
 		case reflect.Struct:
@@ -188,6 +196,15 @@ func callbackWrap(a *callbackArgs) {
 				if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 					// Darwin ARM64: read from packed stack with proper alignment
 					args[i] = callbackArgFromStack(a.args, stackSlot, &stackByteOffset, inType)
+				} else if stackFrame != nil {
+					// ppc64le/s390x: stack args are in separate stackFrame
+					if runtime.GOARCH == "s390x" {
+						// s390x big-endian: sub-8-byte values are right-justified
+						args[i] = callbackArgFromSlotBigEndian(unsafe.Pointer(&stackFrame[stackSlot]), inType)
+					} else {
+						args[i] = reflect.NewAt(inType, unsafe.Pointer(&stackFrame[stackSlot])).Elem()
+					}
+					stackSlot += slots
 				} else {
 					args[i] = reflect.NewAt(inType, unsafe.Pointer(&frame[stackSlot])).Elem()
 					stackSlot += slots
@@ -195,7 +212,12 @@ func callbackWrap(a *callbackArgs) {
 			} else {
 				// the integers begin after the floats in frame
 				pos := intsN + numOfFloatRegisters()
-				args[i] = reflect.NewAt(inType, unsafe.Pointer(&frame[pos])).Elem()
+				if runtime.GOARCH == "s390x" {
+					// s390x big-endian: sub-8-byte values are right-justified in GPR slot
+					args[i] = callbackArgFromSlotBigEndian(unsafe.Pointer(&frame[pos]), inType)
+				} else {
+					args[i] = reflect.NewAt(inType, unsafe.Pointer(&frame[pos])).Elem()
+				}
 			}
 			intsN += slots
 		}
@@ -248,6 +270,27 @@ func callbackArgFromStack(argsBase unsafe.Pointer, stackSlot int, stackByteOffse
 	return reflect.NewAt(inType, ptr).Elem()
 }
 
+// callbackArgFromSlotBigEndian reads an argument from an 8-byte slot on big-endian architectures.
+// On s390x:
+// - Integer types are right-justified in GPRs: sub-8-byte values are at offset (8 - size)
+// - Float32 in FPRs is left-justified: stored in upper 32 bits, so at offset 0
+// - Float64 occupies the full 8-byte slot
+func callbackArgFromSlotBigEndian(slotPtr unsafe.Pointer, inType reflect.Type) reflect.Value {
+	size := inType.Size()
+	if size >= 8 {
+		// 8-byte values occupy the entire slot
+		return reflect.NewAt(inType, slotPtr).Elem()
+	}
+	// Float32 is left-justified in FPRs (upper 32 bits), so offset is 0
+	if inType.Kind() == reflect.Float32 {
+		return reflect.NewAt(inType, slotPtr).Elem()
+	}
+	// Integer types are right-justified: offset = 8 - size
+	offset := 8 - size
+	ptr := unsafe.Add(slotPtr, offset)
+	return reflect.NewAt(inType, ptr).Elem()
+}
+
 // callbackasmAddr returns address of runtime.callbackasm
 // function adjusted by i.
 // On x86 and amd64, runtime.callbackasm is a series of CALL instructions,
@@ -268,10 +311,13 @@ func callbackasmAddr(i int) uintptr {
 	case "386":
 		// On 386, each callback entry is MOVL $imm, CX (5 bytes) + JMP (5 bytes)
 		entrySize = 10
-	case "arm", "arm64", "loong64", "riscv64":
-		// On ARM, ARM64, Loong64, and RISCV64, each entry is a MOV instruction
+	case "arm", "arm64", "loong64", "ppc64le", "riscv64":
+		// On ARM, ARM64, Loong64, PPC64LE and RISCV64, each entry is a MOV instruction
 		// followed by a branch instruction
 		entrySize = 8
+	case "s390x":
+		// On S390X, each entry is LGHI (4 bytes) + JG (6 bytes)
+		entrySize = 10
 	}
 	return callbackasmABI0 + uintptr(i*entrySize)
 }

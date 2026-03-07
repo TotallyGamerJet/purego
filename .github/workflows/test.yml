@@ -7,7 +7,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
-        go: ['1.18.x', '1.19.x', '1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x', '1.25.x', '1.26.0-rc.2']
+        go: ['1.18.x', '1.19.x', '1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x', '1.25.x', '1.26.x']
     name: Test with Go ${{ matrix.go }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     defaults:
@@ -70,12 +70,15 @@ jobs:
           env GOOS=netbsd GOARCH=amd64 go build -v ./...
           env GOOS=netbsd GOARCH=arm64 go build -v ./...
 
-      - name: go build (Linux loong64)
-        if: ${{ !startsWith(matrix.go, '1.18.') && !startsWith(matrix.go, '1.19.') && !startsWith(matrix.go, '1.20.') && !startsWith(matrix.go, '1.21.') && !startsWith(matrix.go, '1.22.') && !startsWith(matrix.go, '1.23.') && !startsWith(matrix.go, '1.24.') }}
+      - name: go build (Linux minor architectures)
+        # Test them only on the latest Go to reduce CI time.
+        # s390x cannot be tested here as it requires Cgo.
+        if: startsWith(matrix.go, '1.26.')
         run: |
-          # Check cross-compiling Linux binaries for loong64.
-          # Loong64 support internal linking from go1.25.
+          # Check cross-compiling Linux binaries for minor architectures.
           env GOOS=linux GOARCH=loong64 go build -v ./...
+          env GOOS=linux GOARCH=ppc64le go build -v ./...
+          env GOOS=linux GOARCH=riscv64 go build -v ./...
 
       - name: go build (plugin)
         if: runner.os == 'Linux' || runner.os == 'macOS'
@@ -128,7 +131,15 @@ jobs:
         if: ${{ runner.os == 'Linux' && runner.arch == 'ARM64' }}
         run: |
            sudo apt-get update
-           sudo apt-get install -y qemu-user gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf libc6-armhf-cross
+           sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf libc6-armhf-cross
+
+           # Install QEMU 10.x from Debian trixie. Ubuntu 24.04 ships QEMU 8.2
+           # which has a bug where inter-thread signal delivery (tgkill) hangs,
+           # causing TestSetuidEtc to deadlock.
+           wget -q http://ftp.debian.org/debian/pool/main/q/qemu/qemu-user_10.0.7+ds-0+deb13u1+b1_arm64.deb -O /tmp/qemu-user.deb
+           wget -q http://ftp.debian.org/debian/pool/main/q/qemu/qemu-user-binfmt_10.0.7+ds-0+deb13u1+b1_arm64.deb -O /tmp/qemu-user-binfmt.deb
+           sudo dpkg --force-depends -i /tmp/qemu-user.deb /tmp/qemu-user-binfmt.deb
+
            # Create symlink for the dynamic linker that QEMU expects
            sudo ln -sf /usr/arm-linux-gnueabihf/lib/ld-linux-armhf.so.3 /lib/ld-linux.so.3
            go env -w CC=arm-linux-gnueabihf-gcc
@@ -139,22 +150,6 @@ jobs:
            env QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf qemu-arm ./purego-test-cgo -test.shuffle=on -test.v -test.count=10
            go env -u CC
            go env -u CXX
-
-      - name: go test (Linux riscv64)
-        if: ${{ runner.os == 'Linux' && runner.arch != 'ARM64' && !startsWith(matrix.go, '1.18.') && !startsWith(matrix.go, '1.19.') && !startsWith(matrix.go, '1.20.') && !startsWith(matrix.go, '1.21.') }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user
-          go env -w CC=riscv64-linux-gnu-gcc
-          go env -w CXX=riscv64-linux-gnu-g++
-          # Create symlink for the dynamic linker that QEMU expects
-          sudo ln -sf /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld.so.1
-          env GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 go test -c -o=purego-test-nocgo .
-          env QEMU_LD_PREFIX=/usr/riscv64-linux-gnu qemu-riscv64 ./purego-test-nocgo -test.shuffle=on -test.v -test.count=10
-          env GOOS=linux GOARCH=riscv64 CGO_ENABLED=1 go test -c -o=purego-test-cgo .
-          env QEMU_LD_PREFIX=/usr/riscv64-linux-gnu qemu-riscv64 ./purego-test-cgo -test.shuffle=on -test.v -test.count=10
-          go env -u CC
-          go env -u CXX
 
       - name: go test race (no Cgo)
         if: ${{ runner.os == 'macOS' &&  !startsWith(matrix.go, '1.18.') && !startsWith(matrix.go, '1.19.') }}
@@ -167,26 +162,49 @@ jobs:
         run: |
           env CGO_ENABLED=1 go test -race -shuffle=on -v -count=10 ./...
 
-  loong:
+  minor-arches:
     strategy:
       matrix:
-        # Loong64 support internal linking from go1.25.
-        go: ['1.25.x']
-    name: Test with Go ${{ matrix.go }} on Linux loong64
+        # Test only the latest two Go versions to save CI time.
+        # See https://go.dev/doc/devel/release#policy
+        go: ['1.25.x', '1.26.x']
+    name: Test with Go ${{ matrix.go }} on Linux minor architectures
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
+
       - name: Set up the prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-14-loongarch64-linux-gnu g++-14-loongarch64-linux-gnu qemu-user
+          sudo apt-get install -y \
+            gcc-14-loongarch64-linux-gnu g++-14-loongarch64-linux-gnu \
+            gcc-powerpc64le-linux-gnu g++-powerpc64le-linux-gnu \
+            gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
+            gcc-s390x-linux-gnu g++-s390x-linux-gnu
+
+          # Install QEMU 10.x from Debian trixie. Ubuntu 24.04 ships QEMU 8.2
+          # which has a bug where inter-thread signal delivery (tgkill) hangs,
+          # causing TestSetuidEtc to deadlock.
+          wget -q http://ftp.debian.org/debian/pool/main/q/qemu/qemu-user_10.0.7+ds-0+deb13u1+b1_amd64.deb -O /tmp/qemu-user.deb
+          wget -q http://ftp.debian.org/debian/pool/main/q/qemu/qemu-user-binfmt_10.0.7+ds-0+deb13u1+b1_amd64.deb -O /tmp/qemu-user-binfmt.deb
+          sudo dpkg --force-depends -i /tmp/qemu-user.deb /tmp/qemu-user-binfmt.deb
+          sudo apt-get -f install -y
+
+          # Verify that the expected QEMU binaries are installed and usable.
+          qemu-loongarch64 --version
+          qemu-ppc64le --version
+          qemu-riscv64 --version
+          qemu-s390x --version
+
       - name: go test (Linux loong64)
         run: |
           go env -w CC=loongarch64-linux-gnu-gcc-14
@@ -198,19 +216,46 @@ jobs:
           go env -u CC
           go env -u CXX
 
+      - name: go test (Linux ppc64le)
+        run: |
+          go env -w CC=powerpc64le-linux-gnu-gcc
+          go env -w CXX=powerpc64le-linux-gnu-g++
+          env GOOS=linux GOARCH=ppc64le CGO_ENABLED=0 go test -c -o=purego-test-nocgo .
+          env QEMU_LD_PREFIX=/usr/powerpc64le-linux-gnu qemu-ppc64le ./purego-test-nocgo -test.shuffle=on -test.v -test.count=10
+          env GOOS=linux GOARCH=ppc64le CGO_ENABLED=1 go test -c -o=purego-test-cgo .
+          env QEMU_LD_PREFIX=/usr/powerpc64le-linux-gnu qemu-ppc64le ./purego-test-cgo -test.shuffle=on -test.v -test.count=10
+          go env -u CC
+          go env -u CXX
+
+      - name: go test (Linux riscv64)
+        run: |
+          go env -w CC=riscv64-linux-gnu-gcc
+          go env -w CXX=riscv64-linux-gnu-g++
+          # Create symlink for the dynamic linker that QEMU expects
+          sudo ln -sf /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld.so.1
+          env GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 go test -c -o=purego-test-nocgo .
+          env QEMU_LD_PREFIX=/usr/riscv64-linux-gnu qemu-riscv64 ./purego-test-nocgo -test.shuffle=on -test.v -test.count=10
+          env GOOS=linux GOARCH=riscv64 CGO_ENABLED=1 go test -c -o=purego-test-cgo .
+          env QEMU_LD_PREFIX=/usr/riscv64-linux-gnu qemu-riscv64 ./purego-test-cgo -test.shuffle=on -test.v -test.count=10
+          go env -u CC
+          go env -u CXX
+
+      - name: go test (Linux s390x)
+        run: |
+          go env -w CC=s390x-linux-gnu-gcc
+          go env -w CXX=s390x-linux-gnu-g++
+          env GOOS=linux GOARCH=s390x CGO_ENABLED=1 go test -c -o=purego-test-cgo .
+          env QEMU_LD_PREFIX=/usr/s390x-linux-gnu qemu-s390x ./purego-test-cgo -test.shuffle=on -test.v -test.count=10
+          go env -u CC
+          go env -u CXX
+
   bsd:
     strategy:
       matrix:
-        os: ['FreeBSD'] # TODO: Add 'NetBSD' again (#304)
-        go: ['1.18.10', '1.19.13', '1.20.14', '1.21.13', '1.22.12', '1.23.12', '1.24.8', '1.25.2', '1.26rc2']
-        exclude:
-          # there are no prebuilt download links for these versions of Go for NetBSD
-          - os: NetBSD
-            go: '1.18.10'
-          - os: NetBSD
-            go: '1.19.13'
-          - os: NetBSD
-            go: '1.20.14'
+        os: ['FreeBSD', 'NetBSD']
+        # Test only the latest two Go versions to save CI time.
+        # See https://go.dev/doc/devel/release#policy
+        go: ['1.25.8', '1.26.1']
     name: Test with Go ${{ matrix.go }} on ${{ matrix.os }}
     runs-on: ubuntu-22.04
     defaults:
