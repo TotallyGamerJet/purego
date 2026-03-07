@@ -883,7 +883,8 @@ func TestRegisterFunc_structReturns(t *testing.T) {
 					D int32
 				}
 				var IdentityMixed5 func(m Mixed5) Mixed5
-				register(&IdentityMixed5, lib, "IdentityMixed5")
+				// TODO: when struct args are supported in NewCallback switch back to register
+				purego.RegisterLibFunc(&IdentityMixed5, lib, "IdentityMixed5")
 				ptr := new(int64)
 				expected := Mixed5{ptr, 1, 7.2, 9}
 				if ret := IdentityMixed5(expected); ret != expected {
