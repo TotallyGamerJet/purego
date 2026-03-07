@@ -20,7 +20,10 @@ type callbackArgs struct {
 	// for this callback.
 	args unsafe.Pointer
 	// Below are out-args from callbackWrap
-	result uintptr
+	result  uintptr
+	result2 uintptr // TODO: make array?
+	result3 uintptr
+	result4 uintptr
 }
 
 func (c *callbackArgs) stackFrame() unsafe.Pointer {

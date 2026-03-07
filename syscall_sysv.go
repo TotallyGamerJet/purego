@@ -7,7 +7,6 @@
 package purego
 
 import (
-	"fmt"
 	"reflect"
 	"runtime"
 	"sync"
