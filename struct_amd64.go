@@ -287,9 +287,9 @@ func bundleStackArgs(stackArgs []reflect.Value, addStack func(uintptr)) {
 }
 
 func setStruct(a *callbackArgs, ret reflect.Value) {
-	fmt.Println(ret)
-	/*outSize := ret.Type().Size()
-	fmt.Println(ret, outSize)
+	//fmt.Println(ret)
+	outSize := ret.Type().Size()
+	//fmt.Println(ret, outSize)
 	switch {
 	case outSize == 0:
 		return
@@ -297,7 +297,7 @@ func setStruct(a *callbackArgs, ret reflect.Value) {
 		reflect.NewAt(ret.Type(), unsafe.Pointer(&a.result)).Elem().Set(ret)
 	default:
 		panic("todo")
-	}*/
+	}
 	if ret.Type().Size() == 0 {
 		return
 	}
@@ -305,8 +305,8 @@ func setStruct(a *callbackArgs, ret reflect.Value) {
 	// if greater than 64 bytes place on stack
 	if ret.Type().Size() > 8*8 {
 		panic("todo")
-		// placeStack(v, addStack)
-		return
+		//placeStack(v, addStack)
+		//return
 	}
 
 	addFloat := func(_ uintptr) {
