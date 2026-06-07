@@ -1,14 +1,15 @@
 # Background
 
-Go currently relies on Cgo for foreign function calls. The cgo tool is quite powerful in that it can generate type safe C to Go translations without being able to parse C itself. However, it is annoying to work with because it requires a dependency on an external C toolchain every time a build happens, causes slow build times due to invoking the C compiler, and has increased call overhead due to stack switching and scheduler coordination.
+Go currently provides two mechanisms for interacting with code outside the Go toolchain:
 
-This proposal does not aim to address the performance point as that has been worked on plenty before ([#68587](https://github.com/golang/go/issues/68587), [#58336](https://github.com/golang/go/issues/58336), [#60961](https://github.com/golang/go/issues/60961)).
+1. The `cgo` tool, which enables calling C code and linking against C libraries.
+2. Platform-specific facilities such as `syscall.SyscallN`, which can invoke functions that follow the platform ABI.
 
-Alternative approaches to Cgo have emerged with [purego](github.com/ebitengine/purego) and [goffi](github.com/go-webgpu/goffi) being the most popular, which demonstrate that it is already possibles (with some hacks) to call a C function without a C compiler and more importantly that there is a true desire from the community for this feature.
+These mechanisms leave a gap. Go has no general, compiler-supported way to call an arbitrary function pointer using the platform ABI without requiring a C compiler.
 
-On Windows, there is the [syscall](https://pkg.go.dev/syscall?GOOS=windows) package which provides SyscallN but it has the limitation of only being able to call functions with uintptr sized arguments which does not meet all libraries' needs. Additionally, other platform APIs and standard libraries (e.g., libc, CoreFoundation.framework) are not accessible by a similar package. The windows syscall package also introduces inefficiencies through extra indirection, module handling overhead, as documented in this [blog post](https://blog.kowalczyk.info/a-3g9f/optimizing-calling-windows-dll-functions-in-go.html).
+Several projects, including [purego](github.com/ebitengine/purego) and [goffi](github.com/go-webgpu/goffi), have demonstrated significant demand for this capability. These projects enable calling dynamically linked functions without a C toolchain, but they rely on runtime tricks, reflection, or internal runtime behavior that is not part of Go's public API.
 
-Go already contains nearly all machinery required to call foreign ABI functions. The remaining gap is a compiler-supported way to invoke a function pointer using the platform ABI. This proposal fills that gap without requiring C parsing, header processing, code generation during builds, or changes to the Go type system.
+The Go runtime and linker already contain most of the machinery necessary to support foreign function calls. The runtime can safely transition between Go and foreign code through `runtime.cgocall`, the linker can import dynamic symbols through `cgo_import_dynamic`, and the compiler already supports multiple ABIs internally. The remaining missing piece is a compiler-supported mechanism for invoking a function pointer using the platform ABI. This proposal introduces such a mechanism.
 
 # Proposal
 
