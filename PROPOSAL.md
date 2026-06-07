@@ -88,11 +88,11 @@ To simplify ABI handling and ensure correctness, the initial implementation shou
 
 It purposely excludes structs, complex numbers, variadics, slices, maps, channels and strings as they complicate the ABI and memory handling needed to correctly pass them into C.
 
-The optional ABI argument may be one of "system" (default) or "raw" (runtime only).
+The optional ABI argument currently supports only the `"system"` ABI.
 
-For the system ABI, the directive calls are routed through the existing runtime mechanism. The compiler generates a function that maps the arguments to the system's C calling convention (SysV, Microsoft x64 calling convention, etc.) and then calls the function stored in the uintptr variable. This reuses the same machinery currently used by cgo (`runtime.cgocall`).
+The system ABI corresponds to the platform's native foreign-function calling convention (SysV on Unix-like amd64 systems, Microsoft x64 on Windows amd64, and equivalent conventions on supported architectures).
 
-The "raw" ABI performs a direct call without `runtime.cgocall`. This means that there are no stack growth checks, no scheduler coordination, or no GC safepoints. This ABI option would only be allowed inside the runtime for use in implementing `runtime/cgo` package in a pure Go way.
+Future work may explore additional ABI options, but they are intentionally excluded from the initial proposal to minimize implementation complexity and ensure that all calls continue to use the runtime's existing foreign-call machinery.
 
 ### Pointer Safety and Garbage Collection
 
@@ -141,6 +141,8 @@ The current suggested implementation is limited to the most utilized platforms (
 ### **Additional ABIs**
 
 Most obvious would be Windows, with its many ABI flavors: stdcall, cdecl, and fastcall. These would most likely need to be limited to their respective GOOS/GOARCH pairs.
+
+Another suggestion is to support a "raw" ABI. The "raw" ABI performs a direct call without `runtime.cgocall`. This means that there are no stack growth checks, no scheduler coordination, or no GC safepoints. This ABI option would only be allowed inside the runtime for use in implementing `runtime/cgo` package in a pure Go way.
 
 ### Port runtime/cgo
 
