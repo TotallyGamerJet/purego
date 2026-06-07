@@ -8,7 +8,7 @@ Alternative approaches to Cgo have emerged with [purego](github.com/ebitengine/p
 
 On Windows, there is the [syscall](https://pkg.go.dev/syscall?GOOS=windows) package which provides SyscallN but it has the limitation of only being able to call functions with uintptr sized arguments which does not meet all libraries' needs. Additionally, other platform APIs and standard libraries (e.g., libc, CoreFoundation.framework) are not accessible by a similar package. The windows syscall package also introduces inefficiencies through extra indirection, module handling overhead, as documented in this [blog post](https://blog.kowalczyk.info/a-3g9f/optimizing-calling-windows-dll-functions-in-go.html).
 
-The Go toolchain already supports the majority of the features needed to call C. It already has support for multiple ABIs (ABI0, ABIInternal), it already has a way to call C function in a GC understood way with `runtime.cgocall`, it can already link to dynamic symbols with cgo\_import\_dynamic. The only thing it can’t do yet is convert Go functions to C calling convention.
+Go already contains nearly all machinery required to call foreign ABI functions. The remaining gap is a compiler-supported way to invoke a function pointer using the platform ABI. This proposal fills that gap without requiring C parsing, header processing, code generation during builds, or changes to the Go type system.
 
 # Proposal
 
