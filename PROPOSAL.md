@@ -3,19 +3,19 @@
 Go currently provides two mechanisms for interacting with code outside the Go toolchain:
 
 1. The `cgo` tool, which enables calling C code and linking against C libraries.
-2. Platform-specific facilities such as `syscall.SyscallN`, which can invoke functions that follow the platform ABI.
+2. Platform-specific facilities such as `syscall.SyscallN`, which can invoke uintptr-sized-argument functions that follow the platform ABI.
 
 These mechanisms leave a gap. Go has no general, compiler-supported way to call an arbitrary function pointer using the platform ABI without requiring a C compiler.
 
-Several projects, including [purego](github.com/ebitengine/purego) and [goffi](github.com/go-webgpu/goffi), have demonstrated significant demand for this capability. These projects enable calling dynamically linked functions without a C toolchain, but they rely on runtime tricks, reflection, or internal runtime behavior that is not part of Go's public API.
+Several projects, including [purego](github.com/ebitengine/purego) and [goffi](github.com/go-webgpu/goffi), have demonstrated significant demand for this capability. These projects enable calling dynamically linked functions without a C toolchain, but they rely on runtime tricks, reflection, and internal runtime behavior that is not part of Go's public API.
 
 The Go runtime and linker already contain most of the machinery necessary to support foreign function calls. The runtime can safely transition between Go and foreign code through `runtime.cgocall`, the linker can import dynamic symbols through `cgo_import_dynamic`, and the compiler already supports multiple ABIs internally. The remaining missing piece is a compiler-supported mechanism for invoking a function pointer using the platform ABI. This proposal introduces such a mechanism.
 
 # Proposal
 
-Introduce a new compiler directive: `//go:cgo_call localname [abi]`. This directive binds a Go function declaration to a function pointer stored in a uintptr, typically populated via `//go:cgo_import_dynamic` or runtime lookup.
+Introduce a new compiler directive: `//go:ffi_call localname [abi]`. This directive binds a Go function declaration to a function pointer stored in a uintptr, typically populated via `//go:cgo_import_dynamic` or runtime lookup.
 
-The `go:cgo_call` directive must be followed by a function declaration with no body. It specifies that the function should call the C function provided by the localname uintptr variable using the abi listed or defaults to "system" abi if none is provided.
+The `go:ffi_call` directive must be followed by a function declaration with no body. It specifies that the function should call the C function provided by the localname uintptr variable using the abi listed or defaults to "system" abi if none is provided.
 
 For example,
 
@@ -23,7 +23,7 @@ For example,
 //go:cgo_import_dynamic mypkg.putsPtr puts "libc.so.6" 
 var putsPtr uintptr
 
-//go:cgo_call putsPtr system
+//go:ffi_call putsPtr system
 func puts(s *byte) int32 
 
 puts(&[]byte("hello from go\x00")[0]) 
@@ -35,12 +35,12 @@ Another example which assigns the variable,
 //go:cgo_import_dynamic mypkg.vkGetInstanceProcAddrPtr vkGetInstanceProcAddr "vulkan-1.dll"
 var vkGetInstanceProcAddrPtr uintptr
 
-//go:cgo_call vkGetInstanceProcAddrPtr
+//go:ffi_call vkGetInstanceProcAddrPtr
 func vkGetInstanceProcAddr(instance VkInstance, pName *byte) uintptr
 
 var vkCreateInstancePtr = vkGetInstanceProcAddr(nil, &[]byte("vkCreateInstance\x00")[0]);
 
-//go:cgo_call vkCreateInstancePtr
+//go:ffi_call vkCreateInstancePtr
 func vkCreateInstance(
     pCreateInfo *VkInstanceCreateInfo,
     pAllocator  *VkAllocationCallbacks,
@@ -63,7 +63,7 @@ type CFStringEncoding uint32
 const kCFStringEncodingUTF8 CFStringEncoding = 0x08000100
 const kCFAllocatorDefault CFAllocatorRef = 0
 
-//go:cgo_call CFStringCreateWithCStringPtr
+//go:ffi_call CFStringCreateWithCStringPtr
 func CFStringCreateWithCString(
     alloc CFAllocatorRef,
     cStr *byte,
@@ -112,7 +112,7 @@ The compiler may reject argument types that cannot be safely passed through the 
 
 The initial implementation would be supported on amd64 & arm64 for windows, linux and darwin as that covers the most popular platforms.
 
-A temporary experiment flag such as `GOEXPERIMENT=foreigncall`
+A temporary experiment flag such as `GOEXPERIMENT=ffiabi`
 may be used during development and evaluation of the feature.
 The experiment period would allow validation of ABI correctness across platforms and
 library author experience before committing to a stable language directive.
