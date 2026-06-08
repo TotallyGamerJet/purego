@@ -124,6 +124,15 @@ The reason for the indirection of a uintptr variable is because there is no defi
 
 Another annoyance that this proposal resolves is when importing symbols in the C package namespace. LSPs give up on checking if a C symbol exists as that would require invoking the C compiler. With this method the entire file is made solely of Go code so type checking is simplified and works as expected.
 
+The proposal binds Go declarations to function pointers rather than directly to linker symbols. This design allows a single mechanism to support:
+
+* Symbols imported at link time through `cgo_import_dynamic`
+* Symbols discovered through `dlopen` and `dlsym`
+* Symbols obtained through `GetProcAddress`
+* APIs that expose function pointers at runtime, such as Vulkan and OpenGL
+
+A direct symbol-binding mechanism would still require a separate solution for APIs whose entry points are discovered dynamically. Function-pointer-based calls support both use cases with the same implementation model.
+
 # The Cost
 
 Every feature has a cost and this one is no different. It adds an entirely new way to call into C which confuses the choice for users. Should they choose the old Cgo or the new one? It also increases the complexity of the runtime to support multiple ABIs for each differing calling convention. In addition it is not able to completely replace the current Cgo implementation as it does not support a way to statically link C into the Go binary . This means it is only really useful for linking against system libraries guaranteed to be present on the system or requiring distributors to bundle the shared library with their binary.
