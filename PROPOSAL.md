@@ -112,7 +112,10 @@ The compiler may reject argument types that cannot be safely passed through the 
 
 The initial implementation would be supported on amd64 & arm64 for windows, linux and darwin as that covers the most popular platforms.
 
-A `GOEXPERIMENT=cgocall` build option can be added to conditionally enable the feature while its implementation and feasible are tested.
+A temporary experiment flag such as `GOEXPERIMENT=foreigncall`
+may be used during development and evaluation of the feature.
+The experiment period would allow validation of ABI correctness across platforms and
+library author experience before committing to a stable language directive.
 
 # Rationale
 
