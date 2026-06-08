@@ -136,6 +136,10 @@ The proposal binds Go declarations to function pointers rather than directly to 
 
 A direct symbol-binding mechanism would still require a separate solution for APIs whose entry points are discovered dynamically. Function-pointer-based calls support both use cases with the same implementation model.
 
+One of Go's defining characteristics is that Go packages can generally be built without requiring external toolchains.
+Today, a package that uses cgo requires every downstream user to have a compatible C toolchain available at build time, even when the package only calls functions from libraries already present on the target system.
+This proposal enables library authors to generate bindings once and distribute ordinary Go source code. Downstream users can then build those packages without requiring a C compiler, improving cross-compilation, build reproducibility, and onboarding experience.
+
 # Drawbacks and Tradeoffs
 
 Every feature has a cost and this one is no different. It adds an entirely new way to call into C which confuses the choice for users. Should they choose the old Cgo or the new one? It also increases the complexity of the runtime to support multiple ABIs for each differing calling convention. In addition it is not able to completely replace the current Cgo implementation as it does not support a way to statically link C into the Go binary . This means it is only really useful for linking against system libraries guaranteed to be present on the system or requiring distributors to bundle the shared library with their binary.
