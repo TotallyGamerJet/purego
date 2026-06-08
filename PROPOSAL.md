@@ -13,9 +13,9 @@ The Go runtime and linker already contain most of the machinery necessary to sup
 
 # Proposal
 
-Introduce a new compiler directive: `//go:ffi_call localname [abi]`. This directive binds a Go function declaration to a function pointer stored in a uintptr, typically populated via `//go:cgo_import_dynamic` or runtime lookup.
+Introduce a new compiler directive: `//go:foreigncall localname [abi]`. This directive binds a Go function declaration to a function pointer stored in a uintptr, typically populated via `//go:cgo_import_dynamic` or runtime lookup.
 
-The `go:ffi_call` directive must be followed by a function declaration with no body. It specifies that the function should call the C function provided by the localname uintptr variable using the abi listed or defaults to "system" abi if none is provided.
+The `go:foreigncall` directive must be followed by a function declaration with no body. It specifies that the function should call the C function provided by the localname uintptr variable using the abi listed or defaults to "system" abi if none is provided.
 
 For example,
 
@@ -23,7 +23,7 @@ For example,
 //go:cgo_import_dynamic mypkg.putsPtr puts "libc.so.6" 
 var putsPtr uintptr
 
-//go:ffi_call putsPtr system
+//go:foreigncall putsPtr system
 func puts(s *byte) int32 
 
 puts(&[]byte("hello from go\x00")[0]) 
@@ -35,12 +35,12 @@ Another example which assigns the variable,
 //go:cgo_import_dynamic mypkg.vkGetInstanceProcAddrPtr vkGetInstanceProcAddr "vulkan-1.dll"
 var vkGetInstanceProcAddrPtr uintptr
 
-//go:ffi_call vkGetInstanceProcAddrPtr
+//go:foreigncall vkGetInstanceProcAddrPtr
 func vkGetInstanceProcAddr(instance VkInstance, pName *byte) uintptr
 
 var vkCreateInstancePtr = vkGetInstanceProcAddr(nil, &[]byte("vkCreateInstance\x00")[0]);
 
-//go:ffi_call vkCreateInstancePtr
+//go:foreigncall vkCreateInstancePtr
 func vkCreateInstance(
     pCreateInfo *VkInstanceCreateInfo,
     pAllocator  *VkAllocationCallbacks,
@@ -63,7 +63,7 @@ type CFStringEncoding uint32
 const kCFStringEncodingUTF8 CFStringEncoding = 0x08000100
 const kCFAllocatorDefault CFAllocatorRef = 0
 
-//go:ffi_call CFStringCreateWithCStringPtr
+//go:foreigncall CFStringCreateWithCStringPtr
 func CFStringCreateWithCString(
     alloc CFAllocatorRef,
     cStr *byte,
@@ -112,7 +112,7 @@ The compiler may reject argument types that cannot be safely passed through the 
 
 The initial implementation would be supported on amd64 & arm64 for windows, linux and darwin as that covers the most popular platforms.
 
-A temporary experiment flag such as `GOEXPERIMENT=ffiabi`
+A temporary experiment flag such as `GOEXPERIMENT=foreigncall`
 may be used during development and evaluation of the feature.
 The experiment period would allow validation of ABI correctness across platforms and
 library author experience before committing to a stable language directive.
