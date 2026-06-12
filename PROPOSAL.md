@@ -147,7 +147,7 @@ In addition it is not able to completely replace the current Cgo implementation
 as it does not support a way to statically link C into the Go binary. 
 This means it is only really useful for linking against libraries guaranteed 
 to be present on the system or requiring distributors to bundle the shared 
-library with their binary.
+library with their binary which breaks Go's single binary model.
 
 # Potential Future Work
 
